@@ -80,6 +80,13 @@ static void get_cpu_ident(char o[49]){
     o[48] = 0;
 }
 
+static const unsigned char has_sha(void) {
+     size_t a, b, c, d;
+
+    __cpuid_count(0x7, 0, a, b, c, d);
+    return ((b >> 29) & 1);
+}
+
 static void get_tsc_freq(void) {
     uint32_t _d;
     __cpuid_count(0x15, 0, tsc_denominator, tsc_numerator, tsc_crystal_frequency, _d);
@@ -425,7 +432,7 @@ int main() {
 
     for(i = 0; i < countof(cipher_benchmarks); i++)
         init_cipher_benchmark(&cipher_benchmarks[i]);
-    for(i = 0; i < countof(mac_benchmarks); i++)
+    for(i = 0; i < countof(mac_benchmarks) && has_sha(); i++)
         init_mac_benchmark(&mac_benchmarks[i]);
 
     printf("\r" STR_OK "Successfully initialized benchmarks! Performing %u repetitions with %u MB per test!\n", NUM_REPEATS, (unsigned)(TEST_CHUNK_SIZE/(1 << 20)));
@@ -443,7 +450,7 @@ int main() {
     }
 
 
-    for(i = 0; i < countof(mac_benchmarks); i++){
+    for(i = 0; i < countof(mac_benchmarks) && has_sha(); i++){
         printf(STR_PEND "Testing correctness of MAC '%s' ...", mac_benchmarks[i].mac_spec);
         fflush(stdout);
         if(verify_mac_correctness(&mac_benchmarks[i], src_buf) < 0) {
@@ -459,7 +466,7 @@ int main() {
 exit:
     for(i = 0; i < countof(cipher_benchmarks); i++)
         free_cipher_benchmark(&cipher_benchmarks[i]);
-    for(i = 0; i < countof(mac_benchmarks); i++)
+    for(i = 0; i < countof(mac_benchmarks) && has_sha(); i++)
         free_mac_benchmark(&mac_benchmarks[i]);
     if(custom_provider)
         OSSL_PROVIDER_unload(custom_provider);
