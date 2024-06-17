@@ -319,7 +319,8 @@ static FILE* get_benchmark_file(const char* spec){
         remove(path);
 
     ret = fopen(path, "w");
-    fprintf(ret, "_CPU = \"%s\"\n\n", cpu_ident);
+    fprintf(ret, "_CPU = \"%s\"\n", cpu_ident);
+    fprintf(ret, "_TEST_CHUNK_SIZE = 0x%lx # Bytes\n\n", (unsigned long) TEST_CHUNK_SIZE);
 
     return ret;
 }
