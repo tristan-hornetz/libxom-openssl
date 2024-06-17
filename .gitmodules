@@ -1,0 +1,3 @@
+[submodule "libxom"]
+	path = libxom
+	url = https://github.com/tristan-hornetz/libxom.git
