@@ -173,7 +173,7 @@ static void discover_hardware_support(xom_provctx* ctx) {
     __cpuid_count(0x7, 0, a, b, c, d);
     ctx->has_vaes = (c >> 9) & 1;
     ctx->has_vpclmulqdq = (c >> 10) & 1;
-    ctx->has_sha = ((b >> 29) & 1) && !xom_hmac_disabled;
+    ctx->has_sha = xom_hmac_disabled ? 0 : ((b >> 29) & 1);
 }
 
 static void check_xom_mode() {
@@ -232,6 +232,8 @@ OSSL_provider_init(const OSSL_CORE_HANDLE *handle, const OSSL_DISPATCH *in, cons
     local_provctx->dflt_provider = OSSL_PROVIDER_load(NULL, "default");
     local_provctx->dflt_hmac = EVP_MAC_fetch(NULL, "HMAC", "provider=default");
 
+    discover_hardware_support(local_provctx);
+
     // Simply re-export algorithms from the default provider for compatibility, but override
     // entries that we implement ourselves
     for (i = 0; i < countof(opcodes); i++) {
@@ -244,7 +246,6 @@ OSSL_provider_init(const OSSL_CORE_HANDLE *handle, const OSSL_DISPATCH *in, cons
         default_algorithms[opcodes[i]] = calloc(algo_count, sizeof(*default_algorithms[0]));
         memcpy(default_algorithms[opcodes[i]], algo, algo_count * sizeof(*default_algorithms[0]));
 
-        discover_hardware_support(local_provctx);
 
         for (j = 0; j < algo_count - 1; j++) {
             default_algorithms[opcodes[i]][j].property_definition = "provider=" PROVIDER_NAME;

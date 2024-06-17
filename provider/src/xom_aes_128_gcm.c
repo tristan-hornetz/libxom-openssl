@@ -266,8 +266,6 @@ int aes_128_gcm_stream_update(void *vctx, unsigned char *out, size_t *outl, size
     size_t c_outl;
     unsigned char AVX_ALIGNED inbuf[AVX2_ALIGNMENT];
 
-    printf("Update!\n");
-
     *outl = 0;
 
     // Handle AAD if none present
