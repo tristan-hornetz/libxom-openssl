@@ -12,7 +12,7 @@ Currently, the following algorithms are supported:
 IMPORTANT: This library re-exports all algorithms implemented by the default provider in order to make using it for more involved protocols like TLS easier.
 ONLY THE ALGORITHMS LISTED ABOVE UTILIZE XOM. Any other algorithm provided by this library is simply a re-export of OpenSSL's default algorithms.
 Furthermore, the HMAC implementation is only exported if you have the AVX2 and SHA instruction set extensions.
-Run `lscpu | grep sha` to check whether your CPU supports them. 
+Run `lscpu | grep sha_ni` to check whether your CPU supports them. 
 
 ### Building
 
