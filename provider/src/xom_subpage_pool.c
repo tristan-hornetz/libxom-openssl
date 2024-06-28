@@ -40,8 +40,6 @@ static struct subpage_list_entry* add_to_pool(struct xom_subpages* subpages) {
 
     subpage_pool.head.next = subpage_pool.head.next->prev = &(entry->head);
 
-
-
     return entry;
 }
 
