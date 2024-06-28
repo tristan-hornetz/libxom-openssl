@@ -61,8 +61,8 @@ extern void __attribute__((section(".data"))) aes_vaes_gctr_linear_end(void);
 extern unsigned char aes_vaes_key_lo;
 extern unsigned char aes_vaes_key_hi;
 
-void setup_aesni_128_key(const struct xombuf* xbuf, const unsigned char* key);
-void setup_vaes_128_key(const struct xombuf *xbuf, const unsigned char *key);
+void setup_aesni_128_key(unsigned char* dest, const unsigned char* key);
+void setup_vaes_128_key(unsigned char* dest, const unsigned char *key);
 
 static size_t __attribute__((optimize("O0"))) call_aesni_implementation(void *icb, const void* x, void *y, unsigned int num_blocks, const void* aes_fun) {
     size_t ret;
@@ -122,5 +122,9 @@ const extern OSSL_DISPATCH ossl_hmac_functions[];
 extern unsigned char xom_provider_debug_prints;
 extern int (*const printf_d) (const char *__restrict format, ...);
 #define printf(...) if (xom_provider_debug_prints) printf_d(__VA_ARGS__);
+
+void* subpage_pool_lock_into_xom (unsigned char* data, size_t size);
+void subpage_pool_free(void* data);
+void destroy_subpage_pool(void);
 
 #endif

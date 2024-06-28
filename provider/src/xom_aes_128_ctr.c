@@ -59,7 +59,7 @@ void *aes_128_ctr_newctx(void *provctx) {
 void aes_128_ctr_freectx(void *vctx) {
     xom_aes_ctr_context *ctx = (xom_aes_ctr_context *) vctx;
 
-    if (!((*(ctx->refcount))--)) {
+    if (!--((*(ctx->refcount)))) {
         xom_free(ctx->xbuf);
         free(ctx->refcount);
         memset(ctx->iv, 0, sizeof(ctx->iv));
@@ -71,7 +71,7 @@ void *aes_128_ctr_dupctx(void *ctx) {
     xom_aes_ctr_context *ret = malloc(sizeof(*ret));
 
     memcpy(ret, ctx, sizeof(*ret));
-    ret->refcount++;
+    (*ret->refcount)++;
     return ret;
 }
 
@@ -101,7 +101,7 @@ int aes_128_ctr_init(void *vctx, const unsigned char *key, size_t keylen, const 
     memcpy(ctx->oiv, iv, AES_128_CTR_IV_SIZE);
     memcpy(ctx->iv, iv, AES_128_CTR_IV_SIZE);
 
-    (ctx->has_vaes ? setup_vaes_128_key : setup_aesni_128_key)(ctx->xbuf, key);
+    (ctx->has_vaes ? setup_vaes_128_key : setup_aesni_128_key)(*(unsigned char**)ctx->xbuf, key);
 
     for (i = 0; i < sizeof(ctx->ctr.d); i++)
         ctx->ctr.b[i] = ctx->iv[(sizeof(ctx->iv) - 1) - i];

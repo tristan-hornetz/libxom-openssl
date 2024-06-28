@@ -18,18 +18,21 @@ add_library(xom_provider SHARED
         provider/src/ghash.s
         provider/src/hmac_sha256.s
         provider/src/xom_hmac_sha256.c
+        provider/src/xom_subpage_pool.c
 )
 
 target_include_directories(xom_provider PUBLIC provider/include)
-target_compile_options(xom_provider PUBLIC "-fPIE;-mssse3;-mpclmul;-mrdrnd;-O3;-mshstk;-fcf-protection=full")
+target_compile_options(xom_provider PUBLIC "-fPIE;-mssse3;-mpclmul;-mrdrnd;-O0;-mshstk;-fcf-protection=full;-fsanitize=address")
 target_link_libraries(xom_provider PUBLIC OpenSSL::Crypto xom)
 
 add_executable(throughput benchmarks/throughput.c)
 target_compile_options(throughput PUBLIC "-march=native;-O3")
 target_link_libraries(throughput PUBLIC OpenSSL::Crypto xom)
+target_link_options(throughput PUBLIC "-fsanitize=address")
 
 if(DEMO)
     find_package(CURL REQUIRED)
     add_executable(demo_https demo_https.c)
     target_link_libraries(demo_https PUBLIC OpenSSL::SSL OpenSSL::Crypto CURL::libcurl)
+    target_link_options(demo_https PUBLIC "-fsanitize=address")
 endif()

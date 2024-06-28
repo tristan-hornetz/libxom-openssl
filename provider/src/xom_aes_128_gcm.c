@@ -19,6 +19,7 @@
 #define AES_128_GCM_BLOCK_SIZE_BITS (AES_128_GCM_BLOCK_SIZE << 3)
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
+#define max(x, y) ((x) > (y) ? (x) : (y))
 
 struct {
     unsigned char AVX_ALIGNED oiv[AES_128_GCM_IV_SIZE];
@@ -40,7 +41,7 @@ struct {
     size_t num_ciphertext_blocks;
     unsigned char block_offset;
     void *aes_fun;
-    struct xombuf *xbuf;
+    unsigned char *staging_buffer;
     unsigned char decrypt: 1;
     unsigned char key_initialized: 1;
     unsigned char iv_initialized: 1;
@@ -48,7 +49,6 @@ struct {
     unsigned char has_h: 1;
     unsigned char has_vaes: 1;
     unsigned char has_vpclmulqdq : 1;
-    unsigned char marked : 1;
 } typedef aes_128_gcm_context;
 
 void gcm_init_avx(__m128i Htable[16], const uint64_t Xi[2]);
@@ -56,7 +56,6 @@ void gcm_ghash_avx(uint64_t Xi[2], const __m128i Htable[16], const uint8_t *inp,
 
 void gcm_init_clmul(__m128i Htable[16], const uint64_t Xi[2]);
 void gcm_ghash_clmul(uint64_t Xi[2], const __m128i Htable[16], const uint8_t *inp,size_t len);
-
 
 _Static_assert(sizeof(((aes_128_gcm_context * )NULL)->ctr) <= AES_128_GCM_IV_SIZE, "Counter is too large");
 
@@ -80,25 +79,15 @@ static int init_aad(aes_128_gcm_context *ctx, const unsigned char *data, size_t 
 void *aes_128_gcm_newctx(void *provctx) {
     xom_provctx* ctx = provctx;
     aes_128_gcm_context *ret = aligned_alloc(AVX2_ALIGNMENT, sizeof(aes_128_gcm_context));
-    struct xombuf *xbuf = xom_alloc(PAGE_SIZE);
     unsigned int *restrict refcount = malloc(sizeof(*refcount));
 
     memset(ret, 0, sizeof(*ret));
 
-    if (ctx->has_vaes){
-        xom_write(xbuf, aes_vaes_gctr_linear,
-                  ((unsigned char *) aes_vaes_gctr_linear_end - (unsigned char *) aes_vaes_gctr_linear), 0);
-    } else {
-        xom_write(xbuf, aes_aesni_gctr_linear,
-                  ((unsigned char *) aes_aesni_gctr_linear_end - (unsigned char *) aes_aesni_gctr_linear), 0);
-    }
-
     *refcount = 1;
 
     *ret = (aes_128_gcm_context) {
-            .aes_fun = *(void **) (xbuf),
+            .aes_fun = NULL,
             .refcount = refcount,
-            .xbuf = xbuf,
             .Htable = aligned_alloc(AVX2_ALIGNMENT, sizeof(__m128i) * 16),
             .has_vaes = ctx->has_vaes,
             .has_vpclmulqdq = ctx->has_vpclmulqdq
@@ -110,14 +99,15 @@ void *aes_128_gcm_newctx(void *provctx) {
 void aes_128_gcm_freectx(void *vctx) {
     aes_128_gcm_context *ctx = (aes_128_gcm_context *) vctx;
 
-    if (!((*(ctx->refcount))--)) {
-        xom_free(ctx->xbuf);
+    if (!--(*(ctx->refcount))) {
+        subpage_pool_free(ctx->aes_fun);
+        if (ctx->staging_buffer)
+            free(ctx->staging_buffer);
         free(ctx->refcount);
         if (ctx->aad)
             free(ctx->aad);
-        if(ctx->Htable){
+        if(ctx->Htable)
             free(ctx->Htable);
-        }
     }
     memset(ctx, 0, sizeof(*ctx));
     free(ctx);
@@ -127,7 +117,7 @@ void *aes_128_gcm_dupctx(void *ctx) {
     aes_128_gcm_context *ret = malloc(sizeof(*ret));
 
     memcpy(ret, ctx, sizeof(*ret));
-    ret->refcount++;
+    (*(ret->refcount))++;
     return ret;
 }
 
@@ -175,6 +165,8 @@ static __m128i getJ0(aes_128_gcm_context *ctx) {
  */
 int aes_128_gcm_einit(void *vctx, const unsigned char *key, size_t keylen, const unsigned char *iv, size_t ivlen,
                       const OSSL_PARAM __attribute__((unused)) params[]) {
+    const size_t vaes_size = (unsigned char*)aes_vaes_gctr_linear_end - (unsigned char*)aes_vaes_gctr_linear;
+    const size_t aesni_size = (unsigned char*)aes_aesni_gctr_linear_end - (unsigned char*)aes_aesni_gctr_linear;
     aes_128_gcm_context *ctx = vctx;
     union { uint64_t u[2]; __m128i o;} AVX_ALIGNED H0;
     unsigned char AVX_ALIGNED zeroes[AVX2_ALIGNMENT];
@@ -183,7 +175,15 @@ int aes_128_gcm_einit(void *vctx, const unsigned char *key, size_t keylen, const
     memset(zeroes, 0, sizeof(zeroes));
 
     if (key && keylen) {
-        (ctx->has_vaes ? setup_vaes_128_key : setup_aesni_128_key)(ctx->xbuf, key);
+        if(!ctx->staging_buffer)
+            ctx->staging_buffer = aligned_alloc(SUBPAGE_SIZE,SUBPAGE_SIZE * (max(vaes_size, aesni_size) / SUBPAGE_SIZE + 1));
+
+        if(ctx->has_vaes)
+            memcpy(ctx->staging_buffer, aes_vaes_gctr_linear, vaes_size);
+        else
+            memcpy(ctx->staging_buffer, aes_aesni_gctr_linear, aesni_size);
+
+        (ctx->has_vaes ? setup_vaes_128_key : setup_aesni_128_key)(ctx->staging_buffer, key);
         ctx->key_initialized = 1;
     }
     if (iv) {
@@ -197,11 +197,10 @@ int aes_128_gcm_einit(void *vctx, const unsigned char *key, size_t keylen, const
     if (!(ctx->iv_initialized && ctx->key_initialized))
         return 1;
 
-    ctx->aes_fun = xom_lock(ctx->xbuf);
-    if(get_xom_mode() == XOM_MODE_SLAT && !ctx->marked) {
-        if(xom_mark_register_clear(ctx->xbuf, 0, 0))
-            return 0;
-        ctx->marked = 1;
+    if(ctx->staging_buffer) {
+        ctx->aes_fun = subpage_pool_lock_into_xom(ctx->staging_buffer, ctx->has_vaes ? vaes_size : aesni_size);
+        free(ctx->staging_buffer);
+        ctx->staging_buffer = NULL;
     }
 
     if (!ctx->has_h) {
