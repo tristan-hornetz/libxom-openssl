@@ -12,18 +12,16 @@ get_H_unprotected:
     movdqa (%rdi), %xmm1
     movaps %xmm1, %xmm4
 
+    aeskeygenassist $1, %xmm1, %xmm2
     call expand_round_key
     movdqa %xmm1, %xmm5
     aeskeygenassist $2, %xmm1, %xmm2
-    inc %al
     call expand_round_key
     movdqa %xmm1, %xmm6
     aeskeygenassist $4, %xmm1, %xmm2
-    inc %al
     call expand_round_key
     movdqa %xmm1, %xmm7
     aeskeygenassist $8, %xmm1, %xmm2
-    inc %al
     call expand_round_key
     movdqa %xmm1, %xmm8
     aeskeygenassist $16, %xmm1, %xmm2

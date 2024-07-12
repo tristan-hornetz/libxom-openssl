@@ -64,6 +64,13 @@ extern unsigned char aes_vaes_key_hi;
 void setup_aesni_128_key(unsigned char* dest, const unsigned char* key);
 void setup_vaes_128_key(unsigned char* dest, const unsigned char *key);
 
+extern void get_H_unprotected(void* data);
+static void __attribute__((optimize("O0"))) get_H(void* data){
+    asm volatile ("call *%0" :: "r"(get_H_unprotected), "D"(data):
+            "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7", "xmm8", "xmm9",
+            "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15");
+}
+
 static size_t __attribute__((optimize("O0"))) call_aesni_implementation(void *icb, const void* x, void *y, unsigned int num_blocks, const void* aes_fun) {
     size_t ret;
     asm volatile ("call *%1" : "=a" (ret) : "r"(aes_fun), "D"(icb), "S" (x), "d"(y), "c"(num_blocks) : "r14", "r15", "r8",

@@ -185,6 +185,24 @@ int aes_128_gcm_einit(void *vctx, const unsigned char *key, size_t keylen, const
 
         (ctx->has_vaes ? setup_vaes_128_key : setup_aesni_128_key)(ctx->staging_buffer, key);
         ctx->key_initialized = 1;
+
+        if (!ctx->has_h) {
+        memcpy(&ctx->H, key, sizeof(ctx->H));
+        get_H(&ctx->H);
+
+        // Prime Htable
+        H0.o = ctx->H;
+
+        asm (
+            "bswapq %0\n"
+            "bswapq %1\n"
+            : "+r"(H0.u[0]), "+r"(H0.u[1])
+        );
+        (ctx->has_vpclmulqdq ? gcm_init_avx : gcm_init_clmul)(ctx->Htable, (void*) &H0);
+
+        ctx->has_h = 1;
+    }
+
     }
     if (iv) {
         ctx->ivlen = ivlen ? ivlen : ctx->ivlen;
@@ -201,21 +219,6 @@ int aes_128_gcm_einit(void *vctx, const unsigned char *key, size_t keylen, const
         ctx->aes_fun = subpage_pool_lock_into_xom(ctx->staging_buffer, ctx->has_vaes ? vaes_size : aesni_size);
         free(ctx->staging_buffer);
         ctx->staging_buffer = NULL;
-    }
-
-    if (!ctx->has_h) {
-        call_aes_implementation(zeroes, zeroes, &ctx->H, 1, ctx->aes_fun, ctx->has_vaes);
-
-        // Prime Htable
-        H0.o = ctx->H;
-        asm (
-            "bswapq %0\n"
-            "bswapq %1\n"
-            : "+r"(H0.u[0]), "+r"(H0.u[1])
-        );
-        (ctx->has_vpclmulqdq ? gcm_init_avx : gcm_init_clmul)(ctx->Htable, (void*) &H0);
-
-        ctx->has_h = 1;
     }
 
     // Build J0 and ICB
