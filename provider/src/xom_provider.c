@@ -251,6 +251,7 @@ OSSL_provider_init(const OSSL_CORE_HANDLE *handle, const OSSL_DISPATCH *in, cons
 
         for (j = 0; j < algo_count - 1; j++) {
             default_algorithms[opcodes[i]][j].property_definition = "provider=" PROVIDER_NAME;
+            continue;
             if(opcodes[i] == OSSL_OP_CIPHER) {
                 if(strstr(default_algorithms[opcodes[i]][j].algorithm_names, "AES-128-GCM") != NULL)
                     default_algorithms[opcodes[i]][j] = aes_128_gcm_entry;
