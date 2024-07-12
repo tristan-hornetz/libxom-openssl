@@ -18,8 +18,6 @@
 
 #define AES_128_GCM_BLOCK_SIZE_BITS (AES_128_GCM_BLOCK_SIZE << 3)
 
-#define min(x, y) ((x) < (y) ? (x) : (y))
-#define max(x, y) ((x) > (y) ? (x) : (y))
 
 struct {
     unsigned char AVX_ALIGNED oiv[AES_128_GCM_IV_SIZE];
@@ -273,6 +271,8 @@ int aes_128_gcm_stream_update(void *vctx, unsigned char *out, size_t *outl, size
     // Handle AAD if none present
     if (!ctx->first_update) {
         ctx->first_update = 1;
+        if(!inl)
+            return 1;
         if (inl < AES_128_GCM_BLOCK_SIZE) {
             init_aad(ctx, in, inl);
             ctx->hash_state = ghash(
@@ -420,6 +420,7 @@ int
 aes_128_gcm_cipher(void *vctx, unsigned char *out, size_t *outl, size_t outsize, const unsigned char *in, size_t inl) {
     const static size_t chunk_blocks = 0x800; // Process data in chunks to make use of cache for ghash
     aes_128_gcm_context *ctx = vctx;
+
     unsigned num_in_blocks = inl / AES_128_GCM_BLOCK_SIZE, num_out_blocks =
             outsize / AES_128_GCM_BLOCK_SIZE, blocks_processed, i;
     make_aligned(AVX2_ALIGNMENT, out, num_in_blocks * AES_128_GCM_BLOCK_SIZE)

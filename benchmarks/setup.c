@@ -31,7 +31,7 @@
 #define TEST_PROV "xom"
 #define TEST_CHUNK_SIZE (1 << 28)
 #define GIGABYTE        (1 << 30)
-#define NUM_REPEATS     0x1000
+#define NUM_REPEATS     0x4000
 #define countof(x)      (sizeof(x)/sizeof(*(x)))
 #define min(x, y)       ((x) < (y) ? (x) : (y))
 
@@ -331,7 +331,7 @@ static void run_cipher_benchmark(cipher_benchmark* benchmark, const unsigned cha
     FILE* f;
     unsigned i, r;
     int len;
-    EVP_CIPHER_CTX* ctx[NUM_REPEATS];
+    EVP_CIPHER_CTX* ctx;
     unsigned char  __attribute__((aligned(32))) block_in[16] = {0, },  __attribute__((aligned(32))) block_out[16] = {0, };
 
     f = get_benchmark_file(benchmark->cipher_spec);
@@ -345,18 +345,22 @@ static void run_cipher_benchmark(cipher_benchmark* benchmark, const unsigned cha
         fprintf(f, "timings_%s = [", runs[r].name);
         for (i = 0; i < NUM_REPEATS; i++) {
 
-            ctx[i] = EVP_CIPHER_CTX_new();
+            ctx = EVP_CIPHER_CTX_new();
+
+
+            EVP_EncryptInit_ex(ctx, runs[r].ciph, NULL, test_key, test_iv);
 
             timing = (ssize_t) rdtsc();
-            EVP_EncryptInit_ex(ctx[i], runs[r].ciph, NULL, test_key, test_iv);
+            EVP_EncryptUpdate(ctx, NULL, &len, NULL, 0);
+
+            EVP_EncryptUpdate(ctx, block_out, &len, block_in, sizeof(block_in));
+
+            EVP_EncryptFinal_ex(ctx, block_out, &len);
             timing = (ssize_t) rdtsc() - timing;
 
-            EVP_EncryptUpdate(ctx[i], NULL, &len, NULL, 0);
-            EVP_EncryptUpdate(ctx[i], block_out, &len, block_in, sizeof(block_in));
-            EVP_EncryptFinal_ex(ctx[i], block_out, &len);
 
+            EVP_CIPHER_CTX_free(ctx);
 
-            EVP_CIPHER_CTX_free(ctx[i]);
 
             avg += timing;
             fprintf(f, "0x%lx, ", timing);

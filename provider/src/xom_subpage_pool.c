@@ -5,8 +5,8 @@
 #define countof(x) (sizeof(x)/sizeof(*(x)))
 #define page_addr(x) ((unsigned long)(x) & ~(PAGE_SIZE - 1))
 #define bytes_to_subpages(x) (((x) / SUBPAGE_SIZE) + (((x) & (SUBPAGE_SIZE-1)) ? SUBPAGE_SIZE : 0))
-#define POOL_BUFFER_SIZE (PAGE_SIZE << 6)
-#define POOL_FREE_THRESHOLD ((POOL_BUFFER_SIZE / SUBPAGE_SIZE) * 3 / 4)
+#define POOL_BUFFER_SIZE (PAGE_SIZE << 9)
+#define POOL_FREE_THRESHOLD ((POOL_BUFFER_SIZE / SUBPAGE_SIZE) * 31 / 32)
 
 struct lhead {
     struct lhead* next;
@@ -56,13 +56,6 @@ static void remove_from_pool(struct subpage_list_entry* entry) {
     free(entry);
 }
 
-static int vptrcmp(const void* a, const void* b) {
-    if (*(void**)a == *(void**)b)
-        return 0;
-
-    return *(void**)a < *(void**)b ? -1 : 1;
-}
-
 
 void* subpage_pool_lock_into_xom (unsigned char* data, size_t size) {
     void* ret = NULL;
@@ -84,7 +77,6 @@ void* subpage_pool_lock_into_xom (unsigned char* data, size_t size) {
         if (ret)
             break;
     }
-
 
     if (!ret) {
         new_subpages = xom_alloc_subpages(POOL_BUFFER_SIZE);

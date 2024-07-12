@@ -14,7 +14,6 @@ struct {
     unsigned int *refcount;
     unsigned char block_offset;
     void *aes_fun;
-    struct xombuf *xbuf;
     unsigned int num;
     union {
         unsigned int d;
@@ -32,24 +31,15 @@ void *aes_128_ctr_newctx(void *provctx) {
 
     xom_provctx* ctx = provctx;
     xom_aes_ctr_context *ret = aligned_alloc(AVX2_ALIGNMENT, sizeof(*ret));
-    struct xombuf *xbuf = xom_alloc(PAGE_SIZE);
     unsigned int *restrict refcount = malloc(sizeof(*refcount));
 
     memset(ret, 0, sizeof(*ret));
 
-    if (ctx->has_vaes){
-        xom_write(xbuf, aes_vaes_gctr_linear,
-                  ((unsigned char *) aes_vaes_gctr_linear_end - (unsigned char *) aes_vaes_gctr_linear), 0);
-    } else {
-        xom_write(xbuf, aes_aesni_gctr_linear,
-                  ((unsigned char *) aes_aesni_gctr_linear_end - (unsigned char *) aes_aesni_gctr_linear), 0);
-    }
     *refcount = 1;
 
     *ret = (xom_aes_ctr_context) {
-            .aes_fun = *(void **) (xbuf),
+            .aes_fun = NULL,
             .refcount = refcount,
-            .xbuf = xbuf,
             .has_vaes = ctx->has_vaes,
     };
 
@@ -60,7 +50,7 @@ void aes_128_ctr_freectx(void *vctx) {
     xom_aes_ctr_context *ctx = (xom_aes_ctr_context *) vctx;
 
     if (!--((*(ctx->refcount)))) {
-        xom_free(ctx->xbuf);
+        subpage_pool_free(ctx->aes_fun);
         free(ctx->refcount);
         memset(ctx->iv, 0, sizeof(ctx->iv));
     }
@@ -90,8 +80,11 @@ void *aes_128_ctr_dupctx(void *ctx) {
  */
 int aes_128_ctr_init(void *vctx, const unsigned char *key, size_t keylen, const unsigned char *iv, size_t ivlen,
                      const OSSL_PARAM __attribute__((unused)) params[]) {
+    const size_t vaes_size = (unsigned char*)aes_vaes_gctr_linear_end - (unsigned char*)aes_vaes_gctr_linear;
+    const size_t aesni_size = (unsigned char*)aes_aesni_gctr_linear_end - (unsigned char*)aes_aesni_gctr_linear;
     xom_aes_ctr_context *ctx = vctx;
     unsigned i;
+    unsigned char* staging_buffer = aligned_alloc(SUBPAGE_SIZE,SUBPAGE_SIZE * (max(vaes_size, aesni_size) / SUBPAGE_SIZE + 1));
 
     if (keylen != AES_128_CTR_KEY_SIZE)
         return 0;
@@ -101,17 +94,21 @@ int aes_128_ctr_init(void *vctx, const unsigned char *key, size_t keylen, const 
     memcpy(ctx->oiv, iv, AES_128_CTR_IV_SIZE);
     memcpy(ctx->iv, iv, AES_128_CTR_IV_SIZE);
 
-    (ctx->has_vaes ? setup_vaes_128_key : setup_aesni_128_key)(*(unsigned char**)ctx->xbuf, key);
+    if(ctx->has_vaes)
+        memcpy(staging_buffer, aes_vaes_gctr_linear, vaes_size);
+    else
+        memcpy(staging_buffer, aes_aesni_gctr_linear, aesni_size);
+
+    (ctx->has_vaes ? setup_vaes_128_key : setup_aesni_128_key)(staging_buffer, key);
 
     for (i = 0; i < sizeof(ctx->ctr.d); i++)
         ctx->ctr.b[i] = ctx->iv[(sizeof(ctx->iv) - 1) - i];
 
-    ctx->aes_fun = xom_lock(ctx->xbuf);
-    if(get_xom_mode() == XOM_MODE_SLAT && !ctx->marked) {
-        if(xom_mark_register_clear(ctx->xbuf, 0, 0))
-            return 0;
-        ctx->marked = 1;
-    }
+    ctx->aes_fun = subpage_pool_lock_into_xom(staging_buffer, ctx->has_vaes ? vaes_size : aesni_size);
+
+    free(staging_buffer);
+    if(!ctx->aes_fun)
+        return 0;
 
     return 1;
 }
