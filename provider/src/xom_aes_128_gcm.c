@@ -18,7 +18,6 @@
 
 #define AES_128_GCM_BLOCK_SIZE_BITS (AES_128_GCM_BLOCK_SIZE << 3)
 
-
 struct {
     unsigned char AVX_ALIGNED oiv[AES_128_GCM_IV_SIZE];
     unsigned char AVX_ALIGNED block[AES_128_GCM_BLOCK_SIZE];

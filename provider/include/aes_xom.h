@@ -6,6 +6,9 @@
 
 #define bits(x) ((x) >> 3)
 
+#define min(x, y) ((x) < (y) ? (x) : (y))
+#define max(x, y) ((x) > (y) ? (x) : (y))
+
 // The number of 'opcode' bytes before the immediate value starts in a "mov imm64 -> reg64" instruction
 #define MOV_OPCODE_SIZE 2
 

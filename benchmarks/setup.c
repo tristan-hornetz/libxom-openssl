@@ -345,22 +345,15 @@ static void run_cipher_benchmark(cipher_benchmark* benchmark, const unsigned cha
         fprintf(f, "timings_%s = [", runs[r].name);
         for (i = 0; i < NUM_REPEATS; i++) {
 
-            ctx = EVP_CIPHER_CTX_new();
-
-
-            EVP_EncryptInit_ex(ctx, runs[r].ciph, NULL, test_key, test_iv);
-
             timing = (ssize_t) rdtsc();
-            EVP_EncryptUpdate(ctx, NULL, &len, NULL, 0);
 
-            EVP_EncryptUpdate(ctx, block_out, &len, block_in, sizeof(block_in));
-
-            EVP_EncryptFinal_ex(ctx, block_out, &len);
+            ctx = EVP_CIPHER_CTX_new();
+            EVP_EncryptInit_ex(ctx, runs[r].ciph, NULL, test_key, test_iv);
             timing = (ssize_t) rdtsc() - timing;
-
-
+            EVP_EncryptUpdate(ctx, NULL, &len, NULL, 0);
+            EVP_EncryptUpdate(ctx, block_out, &len, block_in, sizeof(block_in));
+            EVP_EncryptFinal_ex(ctx, block_out, &len);
             EVP_CIPHER_CTX_free(ctx);
-
 
             avg += timing;
             fprintf(f, "0x%lx, ", timing);
