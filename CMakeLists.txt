@@ -23,11 +23,17 @@ add_library(xom_provider SHARED
 
 target_include_directories(xom_provider PUBLIC provider/include)
 target_compile_options(xom_provider PUBLIC "-fPIE;-mssse3;-mpclmul;-mrdrnd;-O3;-mshstk;-fcf-protection=full")
+target_link_options(xom_provider PUBLIC "-nostdlib")
 target_link_libraries(xom_provider PUBLIC OpenSSL::Crypto xom)
 
 add_executable(throughput benchmarks/throughput.c)
 target_compile_options(throughput PUBLIC "-march=native;-O3")
 target_link_libraries(throughput PUBLIC OpenSSL::Crypto xom)
+
+add_executable(setup benchmarks/setup.c)
+target_compile_options(setup PUBLIC "-march=native;-O3")
+target_link_libraries(setup PUBLIC OpenSSL::Crypto xom)
+
 
 if(DEMO)
     find_package(CURL REQUIRED)

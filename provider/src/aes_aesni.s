@@ -1,4 +1,102 @@
 .file "src/aes_aesni.s"
+
+.text
+.align 0x100
+
+// key + out: %rdi
+.globl get_H_unprotected
+get_H_unprotected:
+    .cfi_startproc
+    .byte	243,15,30,250
+
+    movdqa (%rdi), %xmm1
+    movaps %xmm1, %xmm4
+
+    call expand_round_key
+    movdqa %xmm1, %xmm5
+    aeskeygenassist $2, %xmm1, %xmm2
+    inc %al
+    call expand_round_key
+    movdqa %xmm1, %xmm6
+    aeskeygenassist $4, %xmm1, %xmm2
+    inc %al
+    call expand_round_key
+    movdqa %xmm1, %xmm7
+    aeskeygenassist $8, %xmm1, %xmm2
+    inc %al
+    call expand_round_key
+    movdqa %xmm1, %xmm8
+    aeskeygenassist $16, %xmm1, %xmm2
+    call expand_round_key
+    movdqa %xmm1, %xmm9
+    aeskeygenassist $32, %xmm1, %xmm2
+    call expand_round_key
+    movdqa %xmm1, %xmm10
+    aeskeygenassist $64, %xmm1, %xmm2
+    call expand_round_key
+    movdqa %xmm1, %xmm11
+    aeskeygenassist $0x80, %xmm1, %xmm2
+    call expand_round_key
+    movdqa %xmm1, %xmm12
+    aeskeygenassist $0x1b, %xmm1, %xmm2
+    call expand_round_key
+    movdqa %xmm1, %xmm13
+    aeskeygenassist $0x36, %xmm1, %xmm2
+    call expand_round_key
+    movdqa %xmm1, %xmm14
+
+    pxor       %xmm0, %xmm0
+
+    pxor       %xmm4,  %xmm0
+    aesenc     %xmm5,  %xmm0
+    aesenc     %xmm6,  %xmm0
+    aesenc     %xmm7,  %xmm0
+    aesenc     %xmm8,  %xmm0
+    aesenc     %xmm9,  %xmm0
+    aesenc     %xmm10, %xmm0
+    aesenc     %xmm11, %xmm0
+    aesenc     %xmm12, %xmm0
+    aesenc     %xmm13, %xmm0
+    aesenclast %xmm14, %xmm0
+    movdqa %xmm0, (%rdi)
+
+    pxor   %xmm0, %xmm0
+    movaps %xmm0, %xmm1
+    movaps %xmm0, %xmm2
+    movaps %xmm0, %xmm3
+    movaps %xmm0, %xmm4
+    movaps %xmm0, %xmm5
+    movaps %xmm0, %xmm6
+    movaps %xmm0, %xmm7
+    movaps %xmm0, %xmm8
+    movaps %xmm0, %xmm9
+    movaps %xmm0, %xmm10
+    movaps %xmm0, %xmm11
+    movaps %xmm0, %xmm12
+    movaps %xmm0, %xmm13
+    movaps %xmm0, %xmm14
+
+    .byte	0xf3,0xc3
+    .cfi_endproc
+    ret
+
+expand_round_key:
+    .cfi_startproc
+    .byte	243,15,30,250
+    pshufd $255, %xmm2, %xmm2
+    movdqa %xmm1, %xmm3
+    pslldq $4, %xmm3
+    pxor %xmm3, %xmm1
+    pslldq $4, %xmm3
+    pxor %xmm3, %xmm1
+    pslldq $4, %xmm3
+    pxor %xmm3, %xmm1
+    pxor %xmm2, %xmm1
+    .byte	0xf3,0xc3
+    .cfi_endproc
+    ret
+
+
 .section .rodata
 .align 0x100
 
