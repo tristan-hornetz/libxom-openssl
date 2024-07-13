@@ -8,8 +8,8 @@
 #define countof(x) (sizeof(x)/sizeof(*(x)))
 #define page_addr(x) ((unsigned long)(x) & ~(PAGE_SIZE - 1))
 #define bytes_to_subpages(x) (((x) / SUBPAGE_SIZE) + (((x) & (SUBPAGE_SIZE-1)) ? SUBPAGE_SIZE : 0))
-#define POOL_BUFFER_SIZE (PAGE_SIZE << 9)
-#define POOL_FREE_THRESHOLD ((POOL_BUFFER_SIZE / SUBPAGE_SIZE) * 31 / 32)
+#define POOL_BUFFER_SIZE (PAGE_SIZE << 4)
+#define POOL_FREE_THRESHOLD ((POOL_BUFFER_SIZE / SUBPAGE_SIZE) * 4 / 5)
 
 struct subpage_list_entry {
     struct xom_subpages* subpages;
