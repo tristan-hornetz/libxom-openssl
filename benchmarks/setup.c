@@ -331,7 +331,7 @@ static void run_cipher_benchmark(cipher_benchmark* benchmark, const unsigned cha
     FILE* f;
     unsigned i, r;
     int len;
-    EVP_CIPHER_CTX* ctx;
+    EVP_CIPHER_CTX* ctx[NUM_REPEATS];
     unsigned char  __attribute__((aligned(32))) block_in[16] = {0, },  __attribute__((aligned(32))) block_out[16] = {0, };
 
     f = get_benchmark_file(benchmark->cipher_spec);
@@ -342,33 +342,54 @@ static void run_cipher_benchmark(cipher_benchmark* benchmark, const unsigned cha
 
     for(r = 0; r < countof(runs); r++) {
         avg = 0;
-        fprintf(f, "timings_%s = [", runs[r].name);
+        fprintf(f, "setup_timings_%s = [", runs[r].name);
         for (i = 0; i < NUM_REPEATS; i++) {
 
             timing = (ssize_t) rdtsc();
-
-            ctx = EVP_CIPHER_CTX_new();
-            EVP_EncryptInit_ex(ctx, runs[r].ciph, NULL, test_key, test_iv);
+            ctx[i] = EVP_CIPHER_CTX_new();
+            EVP_EncryptInit_ex(ctx[i], runs[r].ciph, NULL, test_key, test_iv);
             timing = (ssize_t) rdtsc() - timing;
-            EVP_EncryptUpdate(ctx, NULL, &len, NULL, 0);
-            EVP_EncryptUpdate(ctx, block_out, &len, block_in, sizeof(block_in));
-            EVP_EncryptFinal_ex(ctx, block_out, &len);
-            EVP_CIPHER_CTX_free(ctx);
+
+            EVP_EncryptUpdate(ctx[i], NULL, &len, NULL, 0);
+            EVP_EncryptUpdate(ctx[i], block_out, &len, block_in, sizeof(block_in));
+            EVP_EncryptFinal_ex(ctx[i], block_out, &len);
 
             avg += timing;
             fprintf(f, "0x%lx, ", timing);
             if(i && !(i & 0xff))
                 fprintf(f, "\n");
             if(!(i & 0xf)) {
-                printf("\r" STR_PEND "%s %s cipher (%04u/%04u)                            ", benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS);
+                printf("\r" STR_PEND "%s %s cipher setup (%04u/%04u)                            ", benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS);
                 fflush(stdout);
             }
         }
 
+        fprintf(f, "]\n");
+        printf("\r" STR_OK "%s %s cipher setup (%04u/%04u) --> Done! Avg. %f Keys per second                         \n",
+               benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS, 1 / tsc_to_seconds((double) avg / NUM_REPEATS));
+
+
+        fprintf(f, "free_timings_%s = [", runs[r].name);
+        avg = 0;
+        for (i = 0; i < NUM_REPEATS; i++) {
+            timing = (ssize_t) rdtsc();
+            EVP_CIPHER_CTX_free(ctx[i]);
+            timing = (ssize_t) rdtsc() - timing;
+            avg += timing;
+            fprintf(f, "0x%lx, ", timing);
+
+            if(i && !(i & 0xff))
+                fprintf(f, "\n");
+            if(!(i & 0xf)) {
+                printf("\r" STR_PEND "%s %s cipher free (%04u/%04u)                            ", benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS);
+                fflush(stdout);
+            }
+        }
 
         fprintf(f, "]\n");
-        printf("\r" STR_OK "%s %s cipher (%04u/%04u) --> Done! Avg. %f Keys per second                         \n",
+        printf("\r" STR_OK "%s %s cipher free (%04u/%04u) --> Done! Avg. %f Keys per second                         \n",
                benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS, 1 / tsc_to_seconds((double) avg / NUM_REPEATS));
+
     }
 
 exit:
@@ -386,7 +407,7 @@ static void run_mac_benchmark(mac_benchmark* benchmark, const unsigned char* src
     char* mac_key = "unpwnable";
     char hash_spec[16] = {0, };
     unsigned char  __attribute__((aligned(32))) block[64] = {0, };
-    EVP_MAC_CTX* ctx;
+    EVP_MAC_CTX* ctx[NUM_REPEATS];
     OSSL_PARAM params[] = {
             OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST, hash_spec, strnlen(benchmark->hash_spec, sizeof(hash_spec))),
             OSSL_PARAM_construct_octet_string(OSSL_MAC_PARAM_KEY, mac_key, strlen(mac_key)),
@@ -401,29 +422,50 @@ static void run_mac_benchmark(mac_benchmark* benchmark, const unsigned char* src
 
     for(r = 0; r < countof(runs); r++) {
         avg = 0;
-        fprintf(f, "timings_%s = [", runs[r].name);
+        fprintf(f, "setup_timings_%s = [", runs[r].name);
         for (i = 0; i < NUM_REPEATS; i++) {
             timing = (ssize_t) rdtsc();
 
-            ctx = EVP_MAC_CTX_new(runs[r].mac);
-            EVP_MAC_init(ctx, NULL, 0, params);
-            EVP_MAC_update(ctx, (const unsigned char*) block, sizeof(block));
-            EVP_MAC_final(ctx, mac_out, &outl, 32);
-            EVP_MAC_CTX_free(ctx);
+            ctx[i] = EVP_MAC_CTX_new(runs[r].mac);
+            EVP_MAC_init(ctx[i] , NULL, 0, params);
+            EVP_MAC_update(ctx[i] , (const unsigned char*) block, sizeof(block));
+            EVP_MAC_final(ctx[i] , mac_out, &outl, 32);
             timing = (ssize_t) rdtsc() - timing;
             avg += timing;
             fprintf(f, "0x%lx, ", timing);
             if(i && !(i & 0xff))
                 fprintf(f, "\n");
             if(!(i & 0xf)) {
-                printf("\r" STR_PEND "%s %s MAC (%04u/%04u)                            ", benchmark->mac_spec, runs[r].name, i, NUM_REPEATS);
+                printf("\r" STR_PEND "%s %s MAC setup (%04u/%04u)                            ", benchmark->mac_spec, runs[r].name, i, NUM_REPEATS);
                 fflush(stdout);
             }
         }
 
         fprintf(f, "]\n");
-        printf("\r" STR_OK "%s %s MAC (%04u/%04u) --> Done! Avg. %f Keys per second                         \n",
+        printf("\r" STR_OK "%s %s MAC setup (%04u/%04u) --> Done! Avg. %f Keys per second                         \n",
                benchmark->mac_spec, runs[r].name, i, NUM_REPEATS, 1 / tsc_to_seconds((double) avg / NUM_REPEATS));
+
+        avg = 0;
+        fprintf(f, "free_timings_%s = [", runs[r].name);
+        for (i = 0; i < NUM_REPEATS; i++) {
+            timing = (ssize_t) rdtsc();
+            EVP_MAC_CTX_free(ctx[i] );
+            timing = (ssize_t) rdtsc() - timing;
+
+            avg += timing;
+            fprintf(f, "0x%lx, ", timing);
+            if(i && !(i & 0xff))
+                fprintf(f, "\n");
+            if(!(i & 0xf)) {
+                printf("\r" STR_PEND "%s %s MAC free (%04u/%04u)                            ", benchmark->mac_spec, runs[r].name, i, NUM_REPEATS);
+                fflush(stdout);
+            }
+        }
+
+        fprintf(f, "]\n");
+        printf("\r" STR_OK "%s %s MAC free (%04u/%04u) --> Done! Avg. %f Keys per second                         \n",
+               benchmark->mac_spec, runs[r].name, i, NUM_REPEATS, 1 / tsc_to_seconds((double) avg / NUM_REPEATS));
+
     }
 
 exit:

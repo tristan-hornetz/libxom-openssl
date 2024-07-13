@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.14.0)
-project (libxom-provider C ASM)
+project (libxom-provider C CXX ASM)
+
+set_property(GLOBAL PROPERTY C_STANDARD 11)
+set_property(GLOBAL PROPERTY CXX_STANDARD 20)
 
 find_package(OpenSSL REQUIRED)
 
@@ -18,12 +21,11 @@ add_library(xom_provider SHARED
         provider/src/ghash.s
         provider/src/hmac_sha256.s
         provider/src/xom_hmac_sha256.c
-        provider/src/xom_subpage_pool.c
+        provider/src/xom_subpage_pool.cpp
 )
 
 target_include_directories(xom_provider PUBLIC provider/include)
 target_compile_options(xom_provider PUBLIC "-fPIE;-mssse3;-mpclmul;-mrdrnd;-O3;-mshstk;-fcf-protection=full")
-target_link_options(xom_provider PUBLIC "-nostdlib")
 target_link_libraries(xom_provider PUBLIC OpenSSL::Crypto xom)
 
 add_executable(throughput benchmarks/throughput.c)
