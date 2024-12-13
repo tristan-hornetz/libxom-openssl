@@ -4,6 +4,7 @@
 #include <openssl/evp.h>
 #include <openssl/params.h>
 #include <string.h>
+#include <ctype.h>
 #include <immintrin.h>
 #include "aes_xom.h"
 
@@ -60,6 +61,7 @@ struct {
     unsigned char use_passthrough : 1;
     unsigned char first_update : 1;
     unsigned char final_update : 1;
+    unsigned char locked : 1;
     unsigned char marked : 1;
 } typedef hmac_sha256_ctx;
 
@@ -88,6 +90,12 @@ static void set_hmac_sha256_keys(hmac_sha256_ctx* ctx, const void* key, size_t k
     };
     uint8_t key_buf[64];
     unsigned i, j;
+
+    if (!key)
+        return;
+    
+    if (ctx->locked)
+        return;
 
     memset(key_buf, 0, sizeof(key_buf));
     memcpy(key_buf, key, min(sizeof(key_buf), key_len));
@@ -163,6 +171,7 @@ static int hmac_init(void *vctx, const unsigned char *key, size_t keylen, const 
     }
 
     xom_lock(ctx->xbuf);
+    ctx->locked = 1;
     if(get_xom_mode() == XOM_MODE_SLAT && !ctx->marked) {
         if(xom_mark_register_clear(ctx->xbuf, 0, 0))
             return 0;
@@ -315,6 +324,8 @@ static int hmac_set_ctx_params(void *vmacctx, const OSSL_PARAM params[])
 {
     hmac_sha256_ctx* ctx = vmacctx;
     const OSSL_PARAM *p;
+    char md_spec[32];
+    unsigned int i;
 
     if(!EVP_MAC_CTX_set_params(ctx->dflt_ctx, params))
         return 0;
@@ -323,7 +334,13 @@ static int hmac_set_ctx_params(void *vmacctx, const OSSL_PARAM params[])
     if (p) {
         if((p->data_type != OSSL_PARAM_OCTET_STRING && p->data_type != OSSL_PARAM_UTF8_STRING) || !p->data)
             return 0;
-        ctx->use_passthrough = memmem(p->data, p->data_size, "SHA256", 6) ? 0 : 1;
+        for (i = 0; i < sizeof(md_spec) - 1 && i < p->data_size && ((char*)p->data)[i]; i++)
+            md_spec[i] = (char) toupper(((char*)p->data)[i]);
+        md_spec[i] = '\0';
+        if (memmem(p->data, p->data_size, "SHA256", 6) == 0 || memmem(p->data, p->data_size, "SHA2-256", 7) == 0)
+            ctx->use_passthrough = 0;
+        else 
+            ctx->use_passthrough = 1;
     }
 
     p = OSSL_PARAM_locate_const(params, OSSL_MAC_PARAM_KEY);

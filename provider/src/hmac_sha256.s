@@ -355,6 +355,9 @@ hmac256_start:
     // Load old IV
     mov $1, %r8
     movdqa 0x20(%rdx), %xmm4
+    movhlps %xmm4, %xmm3
+    movq %xmm4, %r14
+    movq %xmm3, %r10
 .Lencrypt_counter_block:
     // Encrypt the counter block with AES-128
 
