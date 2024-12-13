@@ -39,8 +39,12 @@ extern uint8_t quad1_key_hi;
 extern uint8_t quad2_key_hi;
 extern uint8_t quad3_key_hi;
 
+// Memory encryption parameters
 extern uint8_t hmac_memenc_key_lo;
 extern uint8_t hmac_memenc_key_hi;
+
+extern uint8_t quad0_hkey;
+extern uint8_t quad1_hkey;
 
 struct {
     EVP_MAC_CTX* dflt_ctx;
@@ -74,7 +78,7 @@ call_hmac_implementation(const void *msg, size_t block_count, void *out, uint8_t
     return ret;
 }
 
-static void set_hmac_sha256_key(hmac_sha256_ctx* ctx, const void* key, size_t key_len) {
+static void set_hmac_sha256_keys(hmac_sha256_ctx* ctx, const void* key, size_t key_len) {
     const void* fn_base = *(void**)ctx->xbuf;
     uint8_t* const hmac_key_ptrs[] = {
             keyptr(fn_base, quad0_key_lo), keyptr(fn_base, quad1_key_lo),
@@ -107,7 +111,7 @@ static void *hmac_new(void *provctx) {
     *(ret->refcount) = 1;
     memcpy(&ret->provctx, provctx, sizeof(ret->provctx));
     ret->dflt_ctx = EVP_MAC_CTX_new(ret->provctx.dflt_hmac);
-    ret->block = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_BLOCK_SIZE * 2);
+    ret->block = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_BLOCK_SIZE * 4);
     ret->hash_state = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_MAC_SIZE + AVX2_ALIGNMENT);
     ret->keylen = 64;
     ret->xbuf = xom_alloc(PAGE_SIZE);
@@ -155,7 +159,7 @@ static int hmac_init(void *vctx, const unsigned char *key, size_t keylen, const 
         keylen = keylen ? keylen : ctx->keylen;
         ctx->keylen = keylen;
 
-        set_hmac_sha256_key(ctx, key, keylen);
+        set_hmac_sha256_keys(ctx, key, keylen);
     }
 
     xom_lock(ctx->xbuf);
@@ -326,7 +330,7 @@ static int hmac_set_ctx_params(void *vmacctx, const OSSL_PARAM params[])
     if (p) {
         if(p->data_type != OSSL_PARAM_OCTET_STRING || !p->data)
             return 0;
-        set_hmac_sha256_key(ctx, p->data, p->data_size);
+        set_hmac_sha256_keys(ctx, p->data, p->data_size);
         ctx->keylen = min(64, p->data_size);
     }
 
