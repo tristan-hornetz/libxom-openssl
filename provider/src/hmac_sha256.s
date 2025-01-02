@@ -527,6 +527,8 @@ hmac256_start:
     ptest %xmm6, %xmm6
     jz .Lload_ymm0_decrypt
     // Fault if the tag does not match
+    test %r15, %r15
+    jnz restore_internal_state
     ud2 
 .Lload_ymm0_decrypt:
     vpxor %ymm4, %ymm5, %ymm0
