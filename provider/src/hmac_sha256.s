@@ -347,7 +347,7 @@ hmac256_start:
     jae .Lsave_ymm0_rdrand2
     movq %r14, %xmm4
     movlhps %xmm3, %xmm4
-    movdqa %xmm4, 0x20(%rdx)
+    movdqa %xmm4, 0x68(%rsp)
     movq %xmm3, %r10
     jmp .Lencrypt_counter_block
 
@@ -484,40 +484,33 @@ hmac256_start:
 .Lsave_ymm0_memaccess:
     vpxor %ymm4, %ymm0, %ymm4
 
-    // Check if we were interrupted in the meantime
-    test %r15, %r15
-    jz .Lsave_ymm0_memaccess_store_critical
-.Lsave_ymm0_abort_operation:
-    mov $2, %r9
-    movdqa %xmm0, state_lo
-    vextracti128 $1, %ymm0, state_hi
-    jmp restore_internal_state
-
-.Lsave_ymm0_memaccess_store_critical:
     // Save to temporary location first
     // If we got interrupted while saving, we can still recover previous backup
     vmovdqa %ymm4, 0x38(%rsp)
     movdqa %xmm3, 0x58(%rsp)
     test %r15, %r15
-    jnz .Lsave_ymm0_abort_operation
+    jnz restore_internal_state
 
 .Lsave_ymm0_save_to_final:
 
     // Now, move backup from temporary location to final location, overwriting the previous backup
     // If we are interrupted during this process, simply repeat until it is done
-    xor %r15, %r15
+    
     vmovdqa 0x38(%rsp), %ymm4
     movdqa 0x58(%rsp), %xmm3
+    movdqa 0x68(%rsp), %xmm5
     vmovdqa %ymm4, (%rdx)
+    movdqa %xmm5, 0x20(%rdx)
     movdqa %xmm3, 0x40(%rdx)
-    test %r15, %r15
-    jnz .Lsave_ymm0_save_to_final
-
     mov %rdi, 0x8(%rsp)
     mov %rsi, (%rsp)
     mfence
 
-    jmp .Lymm0_crypt_return
+    test %r15, %r15
+    jz .Lymm0_crypt_return
+    xor %r15, %r15
+    jmp .Lsave_ymm0_save_to_final
+
 .Lload_ymm0_memaccess:
     // Validate Tag
     vmovdqa (%rdx), %ymm5
@@ -851,7 +844,7 @@ hmac256:
     .cfi_undefined %r14
     push %rbp
     mov %rsp, %rbp
-    sub $0x80, %rsp
+    sub $0xa0, %rsp
     shr $5, %rsp
     shl $5, %rsp
     push %r12
@@ -983,16 +976,14 @@ hmac256:
     pshufd $0x4e, state_lo, state_lo
     pshufd $0x4e, state_hi, state_hi
 
+    // Save HMAC
+    movdqa state_hi, (%rdx)
+    movdqa state_lo, 0x10(%rdx)
+
     // If we were interrupted while computing the outer hash, we have to start again
     mov $2, %r9
     test %r15, %r15
     jnz restore_internal_state
-
-    // Save HMAC
-    mov %rdx, (%rdx)
-    sfence
-    movdqa state_hi, (%rdx)
-    movdqa state_lo, 0x10(%rdx)
 
 .Lexit:
     vzeroall
