@@ -362,13 +362,15 @@ hmac256_start:
     // Encrypt the counter block with AES-128
 
     // Build counter block
-    pxor %xmm3, %xmm3
-    movq $1, %r11
+    movhlps %xmm4, %xmm3
+    vinserti128 $1, %xmm4, %ymm4, %ymm4
+    movq %xmm3, %r11
+    bswap %r11
+    add $1, %r11d # Big endian 32-bit add
     bswap %r11
     movq %r11, %xmm3
-    vpermq $0xe1, %ymm3, %ymm3
-    paddq %xmm4, %xmm3
-    vinserti128 $1, %xmm3, %ymm4, %ymm4
+    movlhps %xmm3, %xmm4
+    vpermq $0x4e, %ymm4, %ymm4
 
     // Encrypt counter block
     vpxor   %ymm5, %ymm4, %ymm4
