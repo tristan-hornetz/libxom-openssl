@@ -4,6 +4,7 @@
 #include <openssl/evp.h>
 #include <openssl/params.h>
 #include <string.h>
+#include <ctype.h>
 #include <immintrin.h>
 #include "aes_xom.h"
 
@@ -39,8 +40,12 @@ extern uint8_t quad1_key_hi;
 extern uint8_t quad2_key_hi;
 extern uint8_t quad3_key_hi;
 
+// Memory encryption parameters
 extern uint8_t hmac_memenc_key_lo;
 extern uint8_t hmac_memenc_key_hi;
+
+extern uint8_t quad0_hkey;
+extern uint8_t quad1_hkey;
 
 struct {
     EVP_MAC_CTX* dflt_ctx;
@@ -56,6 +61,7 @@ struct {
     unsigned char use_passthrough : 1;
     unsigned char first_update : 1;
     unsigned char final_update : 1;
+    unsigned char locked : 1;
     unsigned char marked : 1;
 } typedef hmac_sha256_ctx;
 
@@ -74,7 +80,7 @@ call_hmac_implementation(const void *msg, size_t block_count, void *out, uint8_t
     return ret;
 }
 
-static void set_hmac_sha256_key(hmac_sha256_ctx* ctx, const void* key, size_t key_len) {
+static void set_hmac_sha256_keys(hmac_sha256_ctx* ctx, const void* key, size_t key_len) {
     const void* fn_base = *(void**)ctx->xbuf;
     uint8_t* const hmac_key_ptrs[] = {
             keyptr(fn_base, quad0_key_lo), keyptr(fn_base, quad1_key_lo),
@@ -84,6 +90,12 @@ static void set_hmac_sha256_key(hmac_sha256_ctx* ctx, const void* key, size_t ke
     };
     uint8_t key_buf[64];
     unsigned i, j;
+
+    if (!key)
+        return;
+    
+    if (ctx->locked)
+        return;
 
     memset(key_buf, 0, sizeof(key_buf));
     memcpy(key_buf, key, min(sizeof(key_buf), key_len));
@@ -107,8 +119,8 @@ static void *hmac_new(void *provctx) {
     *(ret->refcount) = 1;
     memcpy(&ret->provctx, provctx, sizeof(ret->provctx));
     ret->dflt_ctx = EVP_MAC_CTX_new(ret->provctx.dflt_hmac);
-    ret->block = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_BLOCK_SIZE * 2);
-    ret->hash_state = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_MAC_SIZE + AVX2_ALIGNMENT);
+    ret->block = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_BLOCK_SIZE * 4);
+    ret->hash_state = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_MAC_SIZE + AVX2_ALIGNMENT * 2);
     ret->keylen = 64;
     ret->xbuf = xom_alloc(PAGE_SIZE);
     ret->hmac_fun = (void*)(*(unsigned char**)ret->xbuf + ((unsigned char*)hmac256 - (unsigned char*)hmac256_start));
@@ -155,10 +167,11 @@ static int hmac_init(void *vctx, const unsigned char *key, size_t keylen, const 
         keylen = keylen ? keylen : ctx->keylen;
         ctx->keylen = keylen;
 
-        set_hmac_sha256_key(ctx, key, keylen);
+        set_hmac_sha256_keys(ctx, key, keylen);
     }
 
     xom_lock(ctx->xbuf);
+    ctx->locked = 1;
     if(get_xom_mode() == XOM_MODE_SLAT && !ctx->marked) {
         if(xom_mark_register_clear(ctx->xbuf, 0, 0))
             return 0;
@@ -311,6 +324,8 @@ static int hmac_set_ctx_params(void *vmacctx, const OSSL_PARAM params[])
 {
     hmac_sha256_ctx* ctx = vmacctx;
     const OSSL_PARAM *p;
+    char md_spec[32];
+    unsigned int i;
 
     if(!EVP_MAC_CTX_set_params(ctx->dflt_ctx, params))
         return 0;
@@ -319,14 +334,20 @@ static int hmac_set_ctx_params(void *vmacctx, const OSSL_PARAM params[])
     if (p) {
         if((p->data_type != OSSL_PARAM_OCTET_STRING && p->data_type != OSSL_PARAM_UTF8_STRING) || !p->data)
             return 0;
-        ctx->use_passthrough = memmem(p->data, p->data_size, "SHA256", 6) ? 0 : 1;
+        for (i = 0; i < sizeof(md_spec) - 1 && i < p->data_size && ((char*)p->data)[i]; i++)
+            md_spec[i] = (char) toupper(((char*)p->data)[i]);
+        md_spec[i] = '\0';
+        if (memmem(p->data, p->data_size, "SHA256", 6) == 0 || memmem(p->data, p->data_size, "SHA2-256", 7) == 0)
+            ctx->use_passthrough = 0;
+        else 
+            ctx->use_passthrough = 1;
     }
 
     p = OSSL_PARAM_locate_const(params, OSSL_MAC_PARAM_KEY);
     if (p) {
         if(p->data_type != OSSL_PARAM_OCTET_STRING || !p->data)
             return 0;
-        set_hmac_sha256_key(ctx, p->data, p->data_size);
+        set_hmac_sha256_keys(ctx, p->data, p->data_size);
         ctx->keylen = min(64, p->data_size);
     }
 

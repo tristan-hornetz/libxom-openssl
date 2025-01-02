@@ -3,6 +3,9 @@
 // SHA code is based on "Intel SHA Extensions - New Instructions Supporting the Secure
 // Hash Algorithm on Intel Architecture Processors" by Gulley et al., 2013
 
+// gfmul implementation is based on "Intel® Carry-Less Multiplication Instruction 
+// and its Usage for Computing the GCM Mode" by Gueron and Kounavis, 2014
+
 ////////////////////////
 // Register assignments
 ////////////////////////
@@ -26,6 +29,16 @@
 .set inner_hash_backup, %ymm1
 .set inner_hash_backup_lo, %xmm1
 
+.set gfmul_in_a, %xmm3
+.set gfmul_in_b, %xmm5
+.set gfmul_clobber1, %xmm7
+.set gfmul_clobber2, %xmm8
+.set gfmul_clobber3, %xmm9
+.set gfmul_clobber4, %xmm10
+.set gfmul_clobber5, %xmm11
+.set gfmul_clobber6, %xmm12
+.set gfmul_clobber7, %xmm13
+.set gfmul_clobber8, %xmm14
 
 ////////////////////////
 // Macros
@@ -38,6 +51,18 @@
     movq %r14, %xmm3
     movlhps	%xmm3, %xmm2
     movdqa %xmm2, \dest
+.endm
+
+.macro load_128bit_constant_custom, name, quad0, quad1, dest, t1
+    .globl quad0_\name
+    quad0_\name:
+    mov $\quad0, %r14
+    movq %r14, \dest
+    .globl quad1_\name
+    quad1_\name:
+    mov $\quad1, %r14
+    movq %r14, \t1
+    movlhps	\t1, \dest
 .endm
 
 .macro load_256bit_constant_xmm, quad0, quad1, quad2, quad3, dest_lo, dest_hi
@@ -87,19 +112,97 @@
     paddd freeusexmm0, msg
 .endm
 
+.macro gfmul_inline, inout, Q, K, relp, t1, t2, t3
+    vpclmulqdq $0x10, \K, \inout, \t3
+    vpclmulqdq $0x11, \Q, \inout, \t1
+    vpxor \t3, \t1, \t1
+    
+    vpclmulqdq $1, \Q, \inout, \t3
+    vpclmulqdq $0, \K, \inout, \t2
+    vpxor \t3, \t2, \t2
+
+    vpclmulqdq $0x10, \relp, \t2, \inout
+    vpshufd $0x4e, \t2, \t3
+    vpxor \t1, \inout, \inout
+    vpxor \t3, \inout, \inout
+.endm
 
 // Place code into .data section, so that we can overwrite the keys
-.section .rodata
+//.section .rodata
+.text
 .align 0x1000
 
 // This symbol only indicates the start of the memory range to be copied into XOM. Do not call.
 .globl hmac256_start
 hmac256_start:
 
+/////////////////////////////////////////
+//  ▗▄▖ ▗▄▄▄▖ ▗▄▄▖     ▗▄▄▖ ▗▄▄▖▗▖  ▗▖ //
+// ▐▌ ▐▌▐▌   ▐▌       ▐▌   ▐▌   ▐▛▚▞▜▌ //
+// ▐▛▀▜▌▐▛▀▀▘ ▝▀▚▖    ▐▌▝▜▌▐▌   ▐▌  ▐▌ //
+// ▐▌ ▐▌▐▙▄▄▖▗▄▄▞▘    ▝▚▄▞▘▝▚▄▄▖▐▌  ▐▌ //
+/////////////////////////////////////////                         
 
-////////////////////////
-// Memory encryption code
-////////////////////////
+// Output goes into gfmul_in_a
+// input_in_b does not chanage
+// r11 decides the return option
+.Lgfmul:
+    movdqa gfmul_in_a, gfmul_clobber2
+    pclmulqdq $0, gfmul_in_b, gfmul_clobber2
+    movdqa gfmul_in_a, gfmul_clobber3
+    pclmulqdq $16, gfmul_in_b, gfmul_clobber3
+    movdqa gfmul_in_a, gfmul_clobber4
+    pclmulqdq $1, gfmul_in_b, gfmul_clobber4
+    movdqa gfmul_in_a, gfmul_clobber5
+    pclmulqdq $17, gfmul_in_b, gfmul_clobber5
+    pxor gfmul_clobber4, gfmul_clobber3
+    movdqa gfmul_clobber3, gfmul_clobber4
+    psrldq $8, gfmul_clobber3
+    pslldq $8, gfmul_clobber4
+    pxor gfmul_clobber4, gfmul_clobber2
+    pxor gfmul_clobber3, gfmul_clobber5
+    movdqa gfmul_clobber2, gfmul_clobber6
+    movdqa gfmul_clobber5, gfmul_clobber7
+    pslld $1, gfmul_clobber2
+    pslld $1, gfmul_clobber5
+    psrld $31, gfmul_clobber6
+    psrld $31, gfmul_clobber7
+    movdqa gfmul_clobber6, gfmul_clobber8
+    pslldq $4, gfmul_clobber7
+    pslldq $4, gfmul_clobber6
+    psrldq $12, gfmul_clobber8
+    por gfmul_clobber6, gfmul_clobber2
+    por gfmul_clobber7, gfmul_clobber5
+    por gfmul_clobber8, gfmul_clobber5
+    movdqa gfmul_clobber2, gfmul_clobber6
+    movdqa gfmul_clobber2, gfmul_clobber7
+    movdqa gfmul_clobber2, gfmul_clobber8
+    pslld $31, gfmul_clobber6
+    pslld $30, gfmul_clobber7
+    pslld $25, gfmul_clobber8
+    pxor gfmul_clobber7, gfmul_clobber6
+    pxor gfmul_clobber8, gfmul_clobber6
+    movdqa gfmul_clobber6, gfmul_clobber7
+    pslldq $12, gfmul_clobber6
+    psrldq $4, gfmul_clobber7
+    pxor gfmul_clobber6, gfmul_clobber2
+    movdqa gfmul_clobber2,gfmul_clobber1
+    movdqa gfmul_clobber2,gfmul_clobber3
+    movdqa gfmul_clobber2,gfmul_clobber4
+    psrld $1, gfmul_clobber1
+    psrld $2, gfmul_clobber3
+    psrld $7, gfmul_clobber4
+    pxor gfmul_clobber3, gfmul_clobber1
+    pxor gfmul_clobber4, gfmul_clobber1
+    pxor gfmul_clobber7, gfmul_clobber1
+    pxor gfmul_clobber1, gfmul_clobber2
+    pxor gfmul_clobber2, gfmul_clobber5
+    movdqa gfmul_clobber5, gfmul_in_a
+    dec %r11
+    jz .Lgfmul_r1
+    dec %r11
+    jz .Lgfmul_r2
+    jmp .Lgfmul_r3
 
 // ymm0-5 remain unaffected
 .Lprime_memory_encryption:
@@ -233,9 +336,10 @@ hmac256_start:
     jnz .Lload_ymm0
 
 .Lsave_ymm0:
-    // Generate new IV
+    // Generate new 96-bit IV
     xor %r8, %r8
-    rdrand %r14
+    xor %r14, %r14
+    rdrand %r14d
     jae .Lsave_ymm0
     movq %r14, %xmm3
 .Lsave_ymm0_rdrand2:
@@ -244,20 +348,31 @@ hmac256_start:
     movq %r14, %xmm4
     movlhps %xmm3, %xmm4
     movdqa %xmm4, 0x20(%rdx)
-    pxor %xmm3, %xmm3
+    movq %xmm3, %r10
     jmp .Lencrypt_counter_block
 
 .Lload_ymm0:
     // Load old IV
     mov $1, %r8
     movdqa 0x20(%rdx), %xmm4
+    movhlps %xmm4, %xmm3
+    movq %xmm4, %r14
+    movq %xmm3, %r10
 .Lencrypt_counter_block:
-    // Encrypt the counter block
+    // Encrypt the counter block with AES-128
 
-    movq %rdx, %xmm3
-    paddq %xmm3, %xmm4
-    vpermq $0x14, %ymm4, %ymm4
+    // Build counter block
+    movhlps %xmm4, %xmm3
+    vinserti128 $1, %xmm4, %ymm4, %ymm4
+    movq %xmm3, %r11
+    bswap %r11
+    add $1, %r11d # Big endian 32-bit add
+    bswap %r11
+    movq %r11, %xmm3
+    movlhps %xmm3, %xmm4
+    vpermq $0x4e, %ymm4, %ymm4
 
+    // Encrypt counter block
     vpxor   %ymm5, %ymm4, %ymm4
     vaesenc %ymm6, %ymm4, %ymm4
     vaesenc %ymm7, %ymm4, %ymm4
@@ -269,6 +384,100 @@ hmac256_start:
     vaesenc %ymm13, %ymm4, %ymm4
     vaesenc %ymm14, %ymm4, %ymm4
     vaesenclast %ymm15, %ymm4, %ymm4
+
+    // Here starts the GCM part
+    // Encrypt Zero-Block to get Hash Subkey
+    // We could pre-compute this, but computing it here is not substantially slower than loading it from immediates
+    vpxor   %ymm3, %ymm3, %ymm3
+    vpxor   %ymm5, %ymm3, %ymm3
+    vaesenc %ymm6, %ymm3, %ymm3
+    vaesenc %ymm7, %ymm3, %ymm3
+    vaesenc %ymm8, %ymm3, %ymm3
+    vaesenc %ymm9, %ymm3, %ymm3
+    vaesenc %ymm10, %ymm3, %ymm3
+    vaesenc %ymm11, %ymm3, %ymm3
+    vaesenc %ymm12, %ymm3, %ymm3
+    vaesenc %ymm13, %ymm3, %ymm3
+    vaesenc %ymm14, %ymm3, %ymm3
+    vaesenclast %ymm15, %ymm3, %ymm3
+
+    // We can drop the values in %xmm5-15 now
+
+    // Get J0 -> 96 bit special case
+    movq %r10, %xmm6
+    movq %r14, %xmm5
+    movlhps %xmm6, %xmm5
+    mov $1, %r14
+    bswap %r14
+    movq %r14, %xmm7
+    pxor %xmm6, %xmm6
+    movlhps %xmm7, %xmm6
+    pxor %xmm6, %xmm5
+
+    // Encrypt J0
+    // The round keys are still in the upper halves of %ymm5-15
+    vextracti128 $1, %ymm5, %xmm6
+    pxor %xmm6, %xmm5
+    vinserti128 $1, %xmm5, %ymm5, %ymm5
+    vaesenc %ymm6, %ymm5, %ymm5
+    vaesenc %ymm7, %ymm5, %ymm5
+    vaesenc %ymm8, %ymm5, %ymm5
+    vaesenc %ymm9, %ymm5, %ymm5
+    vaesenc %ymm10, %ymm5, %ymm5
+    vaesenc %ymm11, %ymm5, %ymm5
+    vaesenc %ymm12, %ymm5, %ymm5
+    vaesenc %ymm13, %ymm5, %ymm5
+    vaesenc %ymm14, %ymm5, %ymm5
+    vaesenclast %ymm15, %ymm5, %ymm5
+    vextracti128 $1, %ymm5, %xmm15
+    
+    // Encrypted J0 is in xmm15
+    // We can now safely forget the round keys
+    
+    movdqa %xmm3, gfmul_in_b
+
+    // Put ciphertext into ymm3
+    test %r8, %r8
+    jnz .Lload_get_ciph
+.Lstore_get_ciph:
+    vpxor %ymm4, %ymm0, %ymm3
+    jmp .Lload_ciph_done
+.Lload_get_ciph:
+    vmovdqa (%rdx), %ymm3
+.Lload_ciph_done:
+
+    // cipher text is in ymm3 - note that xmm3 is gfmul_in_a
+    // encrypted counter block is in ymm4
+    // HK is in xmm5
+    // KK is in xmm6
+    // POLY is in xmm7
+
+    // Hash first and second block into xmm3
+    mov $1, %r11
+    jmp .Lgfmul
+    .Lgfmul_r1:
+    vextracti128 $1, %ymm3, %xmm8
+    vpxor %xmm8, %xmm3, %xmm3
+    mov $2, %r11
+    jmp .Lgfmul
+    .Lgfmul_r2:
+    
+    // Hash length block
+    mov $256, %r11
+    bswap %r11
+    movq %r11, %xmm8
+    vpxor %xmm8, %xmm3, %xmm3
+    mov $3, %r11
+    jmp .Lgfmul
+    .Lgfmul_r3:
+
+    // XOR with encrypted J0
+    pxor %xmm15, %xmm3
+
+    // For store: ymm0 still contains the data to be stored
+    // xmm3 now contains the GCM tag
+    // ymm4 still contains the encrypted counter block
+
     test %r8, %r8
     jnz .Lload_ymm0_memaccess
 
@@ -288,6 +497,7 @@ hmac256_start:
     // Save to temporary location first
     // If we got interrupted while saving, we can still recover previous backup
     vmovdqa %ymm4, 0x38(%rsp)
+    movdqa %xmm3, 0x58(%rsp)
     test %r15, %r15
     jnz .Lsave_ymm0_abort_operation
 
@@ -297,27 +507,41 @@ hmac256_start:
     // If we are interrupted during this process, simply repeat until it is done
     xor %r15, %r15
     vmovdqa 0x38(%rsp), %ymm4
+    movdqa 0x58(%rsp), %xmm3
     vmovdqa %ymm4, (%rdx)
+    movdqa %xmm3, 0x40(%rdx)
     test %r15, %r15
     jnz .Lsave_ymm0_save_to_final
 
     mov %rdi, 0x8(%rsp)
     mov %rsi, (%rsp)
+    mfence
 
     jmp .Lymm0_crypt_return
 .Lload_ymm0_memaccess:
-    vmovdqa (%rdx), %ymm0
-    vpxor %ymm4, %ymm0, %ymm0
+    // Validate Tag
+    vmovdqa (%rdx), %ymm5
+    movdqa 0x40(%rdx), %xmm6
+    lfence
+    pxor %xmm3, %xmm6
+    ptest %xmm6, %xmm6
+    jz .Lload_ymm0_decrypt
+    // Fault if the tag does not match
+    ud2 
+.Lload_ymm0_decrypt:
+    vpxor %ymm4, %ymm5, %ymm0
 
 .Lymm0_crypt_return:
-    mfence
     dec %al
     jmp .Lrestore_sha_registers
 
 
-////////////////////////
-// HMAC/SHA256 Code
-////////////////////////
+/////////////////////////////////////////////////////////////
+// ▗▖ ▗▖▗▖  ▗▖ ▗▄▖  ▗▄▄▖     ▗▄▄▖▗▖ ▗▖ ▗▄▖ ▄▄▄▄ ▄▄▄▄ ▄▄▄▄  //
+// ▐▌ ▐▌▐▛▚▞▜▌▐▌ ▐▌▐▌       ▐▌   ▐▌ ▐▌▐▌ ▐▌   █ █    █     //
+// ▐▛▀▜▌▐▌  ▐▌▐▛▀▜▌▐▌        ▝▀▚▖▐▛▀▜▌▐▛▀▜▌█▀▀▀ ▀▀▀█ █▀▀█  //
+// ▐▌ ▐▌▐▌  ▐▌▐▌ ▐▌▝▚▄▄▖    ▗▄▄▞▘▐▌ ▐▌▐▌ ▐▌█▄▄▄ ▄▄▄█ █▄▄█  //
+/////////////////////////////////////////////////////////////
 
 // Load and pad HMAC key
 // if %r8 == 0 then ipad else opad
