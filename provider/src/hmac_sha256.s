@@ -49,7 +49,7 @@
     movq %r14, %xmm2
     mov $\quad1, %r14
     movq %r14, %xmm3
-    movlhps	%xmm3, %xmm2
+    movlhps    %xmm3, %xmm2
     movdqa %xmm2, \dest
 .endm
 
@@ -62,7 +62,7 @@
     quad1_\name:
     mov $\quad1, %r14
     movq %r14, \t1
-    movlhps	\t1, \dest
+    movlhps    \t1, \dest
 .endm
 
 .macro load_256bit_constant_xmm, quad0, quad1, quad2, quad3, dest_lo, dest_hi
@@ -70,13 +70,13 @@
     movq %r14, %xmm2
     mov $\quad1, %r14
     movq %r14, %xmm3
-    movlhps	%xmm3, %xmm2
+    movlhps    %xmm3, %xmm2
     movdqa %xmm2, \dest_lo
     mov $\quad2, %r14
     movq %r14, %xmm4
     mov $\quad3, %r14
     movq %r14, %xmm5
-    movlhps	%xmm5,%xmm4
+    movlhps    %xmm5,%xmm4
     movdqa %xmm4, \dest_hi
 .endm
 
@@ -89,7 +89,7 @@
     quad1_\name:
     mov $\quad1, %r14
     movq %r14, %xmm3
-    movlhps	%xmm3, %xmm2
+    movlhps    %xmm3, %xmm2
     .globl quad2_\name
     quad2_\name:
     mov $\quad2, %r14
@@ -98,7 +98,7 @@
     quad3_\name:
     mov $\quad3, %r14
     movq %r14, %xmm5
-    movlhps	%xmm5,%xmm4
+    movlhps    %xmm5,%xmm4
     vinserti128    $1, %xmm4, %ymm2, \dest
     xor %r14, %r14
 .endm
@@ -215,7 +215,7 @@ hmac256_start:
     hmac_memenc_key_hi:
     movq $0x123456789abcdef,%r14
     movq   %r14,%xmm8
-    movlhps	%xmm8,%xmm9
+    movlhps    %xmm8,%xmm9
 
     // Prepare for round key generation
     movaps %xmm9, %xmm8
@@ -575,9 +575,9 @@ sha256_compress_block:
     movdqa msg, tmsg0
     roundconst_get_inline 428a2f98,71374491,b5c0fbcf,e9b5dba5
 
-    sha256rnds2	state_lo, state_hi
+    sha256rnds2    state_lo, state_hi
     pshufd $0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
+    sha256rnds2    state_hi, state_lo
 
     /* Rounds 4-7 */
     vextracti128 $1, block_lo, msg
@@ -585,10 +585,10 @@ sha256_compress_block:
     movdqa msg, tmsg1
     roundconst_get_inline 3956c25b,59f111f1,923f82a4,ab1c5ed5
 
-    sha256rnds2	state_lo, state_hi
-    pshufd 		$0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
-    sha256msg1	tmsg1, tmsg0
+    sha256rnds2    state_lo, state_hi
+    pshufd         $0x0e, msg, msg
+    sha256rnds2    state_hi, state_lo
+    sha256msg1    tmsg1, tmsg0
 
     /* Rounds 8-11 */
     vextracti128 $0, block_hi, msg
@@ -596,10 +596,10 @@ sha256_compress_block:
     movdqa msg, tmsg2
     roundconst_get_inline d807aa98,12835b01,243185be,550c7dc3
 
-    sha256rnds2	state_lo, state_hi
-    pshufd 		$0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
-    sha256msg1	tmsg2, tmsg1
+    sha256rnds2    state_lo, state_hi
+    pshufd         $0x0e, msg, msg
+    sha256rnds2    state_hi, state_lo
+    sha256msg1    tmsg2, tmsg1
 
     /* Rounds 12-15 */
     vextracti128 $1, block_hi, msg
@@ -607,163 +607,163 @@ sha256_compress_block:
     movdqa msg, tmsg3
     roundconst_get_inline 72be5d74,80deb1fe,9bdc06a7,c19bf174
 
-    sha256rnds2	state_lo, state_hi
+    sha256rnds2    state_lo, state_hi
     movdqa tmsg3, tmsg4
     palignr $0x4, tmsg2, tmsg4
     paddd tmsg4, tmsg0
     sha256msg2 tmsg3, tmsg0
-    pshufd 		$0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
+    pshufd         $0x0e, msg, msg
+    sha256rnds2    state_hi, state_lo
     sha256msg1 tmsg3, tmsg2
 
     /* Rounds 16-19 */
     movdqa tmsg0, msg
     roundconst_get_inline e49b69c1,efbe4786,0fc19dc6,240ca1cc
 
-    sha256rnds2	state_lo, state_hi
+    sha256rnds2    state_lo, state_hi
     movdqa tmsg0, tmsg4
-	palignr	$0x04, tmsg3, tmsg4
-	paddd tmsg4, tmsg1
-	sha256msg2	tmsg0, tmsg1
-	pshufd $0x0e, msg, msg
-	sha256rnds2	state_hi, state_lo
-	sha256msg1 tmsg0, tmsg3
+    palignr    $0x04, tmsg3, tmsg4
+    paddd tmsg4, tmsg1
+    sha256msg2    tmsg0, tmsg1
+    pshufd $0x0e, msg, msg
+    sha256rnds2    state_hi, state_lo
+    sha256msg1 tmsg0, tmsg3
 
     /* Rounds 20-23 */
     movdqa tmsg1, msg
     roundconst_get_inline 2de92c6f,4a7484aa,5cb0a9dc,76f988da
 
-    sha256rnds2	state_lo, state_hi
-	movdqa tmsg1, tmsg4
-	palignr $4, tmsg0, tmsg4
-	paddd tmsg4, tmsg2
-	sha256msg2 tmsg1, tmsg2
+    sha256rnds2    state_lo, state_hi
+    movdqa tmsg1, tmsg4
+    palignr $4, tmsg0, tmsg4
+    paddd tmsg4, tmsg2
+    sha256msg2 tmsg1, tmsg2
     pshufd $0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
-	sha256msg1 tmsg1, tmsg0
+    sha256rnds2    state_hi, state_lo
+    sha256msg1 tmsg1, tmsg0
 
     /* Rounds 24-27 */
     movdqa tmsg2, msg
     roundconst_get_inline 983e5152,a831c66d,b00327c8,bf597fc7
 
-    sha256rnds2	state_lo, state_hi
-	movdqa tmsg2, tmsg4
-	palignr	$0x04, tmsg1, tmsg4
-	paddd tmsg4, tmsg3
-	sha256msg2 tmsg2, tmsg3
+    sha256rnds2    state_lo, state_hi
+    movdqa tmsg2, tmsg4
+    palignr    $0x04, tmsg1, tmsg4
+    paddd tmsg4, tmsg3
+    sha256msg2 tmsg2, tmsg3
     pshufd $0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
-	sha256msg1	tmsg2, tmsg1
+    sha256rnds2    state_hi, state_lo
+    sha256msg1    tmsg2, tmsg1
 
     /* Rounds 28-31 */
     movdqa tmsg3, msg
     roundconst_get_inline c6e00bf3,d5a79147,06ca6351,14292967
 
-    sha256rnds2	state_lo, state_hi
-	movdqa tmsg3, tmsg4
-	palignr	$0x04, tmsg2, tmsg4
-	paddd tmsg4, tmsg0
-	sha256msg2 tmsg3, tmsg0
-	pshufd $0x0e, msg, msg
-	sha256rnds2	state_hi, state_lo
-	sha256msg1 tmsg3, tmsg2
+    sha256rnds2    state_lo, state_hi
+    movdqa tmsg3, tmsg4
+    palignr    $0x04, tmsg2, tmsg4
+    paddd tmsg4, tmsg0
+    sha256msg2 tmsg3, tmsg0
+    pshufd $0x0e, msg, msg
+    sha256rnds2    state_hi, state_lo
+    sha256msg1 tmsg3, tmsg2
 
     /* Rounds 32-35 */
     movdqa tmsg0, msg
     roundconst_get_inline 27b70a85,2e1b2138,4d2c6dfc,53380d13
 
-    sha256rnds2	state_lo, state_hi
+    sha256rnds2    state_lo, state_hi
     movdqa tmsg0, tmsg4
-	palignr	$0x04, tmsg3, tmsg4
-	paddd tmsg4, tmsg1
-	sha256msg2	tmsg0, tmsg1
-	pshufd $0x0e, msg, msg
-	sha256rnds2	state_hi, state_lo
-	sha256msg1 tmsg0, tmsg3
+    palignr    $0x04, tmsg3, tmsg4
+    paddd tmsg4, tmsg1
+    sha256msg2    tmsg0, tmsg1
+    pshufd $0x0e, msg, msg
+    sha256rnds2    state_hi, state_lo
+    sha256msg1 tmsg0, tmsg3
 
     /* Rounds 36-39 */
     movdqa tmsg1, msg
     roundconst_get_inline 650a7354,766a0abb,81c2c92e,92722c85
 
-    sha256rnds2	state_lo, state_hi
-	movdqa tmsg1, tmsg4
-	palignr $4, tmsg0, tmsg4
-	paddd tmsg4, tmsg2
-	sha256msg2 tmsg1, tmsg2
+    sha256rnds2    state_lo, state_hi
+    movdqa tmsg1, tmsg4
+    palignr $4, tmsg0, tmsg4
+    paddd tmsg4, tmsg2
+    sha256msg2 tmsg1, tmsg2
     pshufd $0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
-	sha256msg1 tmsg1, tmsg0
+    sha256rnds2    state_hi, state_lo
+    sha256msg1 tmsg1, tmsg0
 
     /* Rounds 40-43 */
     movdqa tmsg2, msg
     roundconst_get_inline a2bfe8a1,a81a664b,c24b8b70,c76c51a3
 
-    sha256rnds2	state_lo, state_hi
-	movdqa tmsg2, tmsg4
-	palignr	$0x04, tmsg1, tmsg4
-	paddd tmsg4, tmsg3
-	sha256msg2 tmsg2, tmsg3
+    sha256rnds2    state_lo, state_hi
+    movdqa tmsg2, tmsg4
+    palignr    $0x04, tmsg1, tmsg4
+    paddd tmsg4, tmsg3
+    sha256msg2 tmsg2, tmsg3
     pshufd $0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
-	sha256msg1	tmsg2, tmsg1
+    sha256rnds2    state_hi, state_lo
+    sha256msg1    tmsg2, tmsg1
 
     /* Rounds 44-47 */
     movdqa tmsg3, msg
     roundconst_get_inline d192e819,d6990624,f40e3585,106aa070
 
-    sha256rnds2	state_lo, state_hi
-	movdqa tmsg3, tmsg4
-	palignr	$0x04, tmsg2, tmsg4
-	paddd tmsg4, tmsg0
-	sha256msg2 tmsg3, tmsg0
-	pshufd $0x0e, msg, msg
-	sha256rnds2	state_hi, state_lo
-	sha256msg1 tmsg3, tmsg2
+    sha256rnds2    state_lo, state_hi
+    movdqa tmsg3, tmsg4
+    palignr    $0x04, tmsg2, tmsg4
+    paddd tmsg4, tmsg0
+    sha256msg2 tmsg3, tmsg0
+    pshufd $0x0e, msg, msg
+    sha256rnds2    state_hi, state_lo
+    sha256msg1 tmsg3, tmsg2
 
     /* Rounds 48-51 */
     movdqa tmsg0, msg
     roundconst_get_inline 19a4c116,1e376c08,2748774c,34b0bcb5
 .LloadroundconstF1:
-    sha256rnds2	state_lo, state_hi
-	movdqa tmsg0, tmsg4
-	palignr $0x04, tmsg3, tmsg4
-	paddd tmsg4, tmsg1
-	sha256msg2 tmsg0, tmsg1
-	pshufd $0x0e, msg, msg
-	sha256rnds2	state_hi, state_lo
-	sha256msg1 tmsg0, tmsg3
+    sha256rnds2    state_lo, state_hi
+    movdqa tmsg0, tmsg4
+    palignr $0x04, tmsg3, tmsg4
+    paddd tmsg4, tmsg1
+    sha256msg2 tmsg0, tmsg1
+    pshufd $0x0e, msg, msg
+    sha256rnds2    state_hi, state_lo
+    sha256msg1 tmsg0, tmsg3
 
-	/* Rounds 52-55 */
-	movdqa tmsg1, msg
+    /* Rounds 52-55 */
+    movdqa tmsg1, msg
     roundconst_get_inline 391c0cb3,4ed8aa4a,5b9cca4f,682e6ff3
 .LloadroundconstF2:
     sha256rnds2 state_lo, state_hi
-	movdqa tmsg1, tmsg4
-	palignr $0x04, tmsg0, tmsg4
-	paddd tmsg4, tmsg2
-	sha256msg2 tmsg1, tmsg2
+    movdqa tmsg1, tmsg4
+    palignr $0x04, tmsg0, tmsg4
+    paddd tmsg4, tmsg2
+    sha256msg2 tmsg1, tmsg2
     pshufd  $0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
+    sha256rnds2    state_hi, state_lo
 
     /* Rounds 56-59 */
-	movdqa tmsg2, msg
+    movdqa tmsg2, msg
     roundconst_get_inline 748f82ee,78a5636f,84c87814,8cc70208
 .LloadroundconstF3:
-    sha256rnds2	state_lo, state_hi
-	movdqa tmsg2, tmsg4
-	palignr	$0x04, tmsg1, tmsg4
-	paddd tmsg4, tmsg3
-	sha256msg2 tmsg2, tmsg3
+    sha256rnds2    state_lo, state_hi
+    movdqa tmsg2, tmsg4
+    palignr    $0x04, tmsg1, tmsg4
+    paddd tmsg4, tmsg3
+    sha256msg2 tmsg2, tmsg3
     pshufd $0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
+    sha256rnds2    state_hi, state_lo
 
     /* Rounds 60-63 */
     movdqa tmsg3, msg
     roundconst_get_inline 90befffa,a4506ceb,bef9a3f7,c67178f2
 .LloadroundconstF4:
-    sha256rnds2	state_lo, state_hi
+    sha256rnds2    state_lo, state_hi
     pshufd $0x0e, msg, msg
-    sha256rnds2	state_hi, state_lo
+    sha256rnds2    state_hi, state_lo
 
     /* Add to hash state */
     vextracti128 $1, state_backup, freeusexmm0
@@ -844,7 +844,7 @@ restore_internal_state:
 .globl hmac256
 hmac256:
     .cfi_startproc
-    .byte	243,15,30,250
+    .byte    243,15,30,250
     .cfi_undefined %r15
     .cfi_undefined %r14
     push %rbp
@@ -872,18 +872,18 @@ hmac256:
     // Load shuffle mask
     load_128bit_constant 0x0405060700010203, 0x0c0d0e0f08090a0b, ishuf_mask
     load_256bit_constant_xmm 0xbb67ae856a09e667, 0xa54ff53a3c6ef372, 0x9b05688c510e527f, 0x5be0cd191f83d9ab, state_lo, state_hi
-    pshufd		$0xb1, state_lo, state_lo
-	pshufd		$0x1b, state_hi, state_hi
-    movdqa		state_lo, tmsg4
-	palignr		$0x08, state_hi, state_lo
-	pblendw		$0xf0, tmsg4, state_hi
+    pshufd        $0xb1, state_lo, state_lo
+    pshufd        $0x1b, state_hi, state_hi
+    movdqa        state_lo, tmsg4
+    palignr        $0x08, state_hi, state_lo
+    pblendw        $0xf0, tmsg4, state_hi
 
     // Compress inner key
-	xor %r8, %r8
-	jmp load_key
+    xor %r8, %r8
+    jmp load_key
 .Lhmac_compress_key:
-	mov $1, %al
-	jmp sha256_compress_block
+    mov $1, %al
+    jmp sha256_compress_block
 
 .Lhmac_inner_key_compressed:
     test %r15, %r15
@@ -922,16 +922,16 @@ hmac256:
     jnz .Lhmac_compression_start
 
     // Is this the final call? If not, save state and exit here
-	mov $0xff, %r9b
-	test %r12b, %r12b
-	jz backup_internal_state
+    mov $0xff, %r9b
+    test %r12b, %r12b
+    jz backup_internal_state
 
     // Bring hash bytes into correct order
     pshufd $0x1b, state_lo, state_lo
-	pshufd $0xb1, state_hi, state_hi
-	movdqa state_lo, tmsg4
-	pblendw	$0xf0, state_hi, state_lo
-	palignr	$0x08, tmsg4, state_hi
+    pshufd $0xb1, state_hi, state_hi
+    movdqa state_lo, tmsg4
+    pblendw    $0xf0, state_hi, state_lo
+    palignr    $0x08, tmsg4, state_hi
 
     pshufb ishuf_mask, state_lo
     pshufb ishuf_mask, state_hi
@@ -940,43 +940,43 @@ hmac256:
 .Lhmac_start_outer_hash:
 
     // Backup inner hash
-	movdqa state_lo, inner_hash_backup_lo
-	vinserti128 $1, state_hi, inner_hash_backup, inner_hash_backup
+    movdqa state_lo, inner_hash_backup_lo
+    vinserti128 $1, state_hi, inner_hash_backup, inner_hash_backup
 
     // Load initial hash state for outer hash
     load_256bit_constant_xmm 0xbb67ae856a09e667, 0xa54ff53a3c6ef372, 0x9b05688c510e527f, 0x5be0cd191f83d9ab, state_lo, state_hi
-    pshufd		$0xb1, state_lo, state_lo
-	pshufd		$0x1b, state_hi, state_hi
-    movdqa		state_lo, tmsg4
-	palignr		$0x08, state_hi, state_lo
-	pblendw		$0xf0, tmsg4, state_hi
+    pshufd        $0xb1, state_lo, state_lo
+    pshufd        $0x1b, state_hi, state_hi
+    movdqa        state_lo, tmsg4
+    palignr        $0x08, state_hi, state_lo
+    pblendw        $0xf0, tmsg4, state_hi
 
-	// Compress outer key
-	xor %r8, %r8
-	inc %r8
-	jmp load_key
+    // Compress outer key
+    xor %r8, %r8
+    inc %r8
+    jmp load_key
 .Lhmac_compress_outer_key:
 
-	mov $3, %al
-	jmp sha256_compress_block
+    mov $3, %al
+    jmp sha256_compress_block
 
 .Lhmac_compress_outer_key_done:
-	vmovdqa inner_hash_backup, block_lo
-	// Padding
-	load_256bit_constant   0x0000000000000080, 0x0, 0x0, 0x0003000000000000 block_hi
+    vmovdqa inner_hash_backup, block_lo
+    // Padding
+    load_256bit_constant   0x0000000000000080, 0x0, 0x0, 0x0003000000000000 block_hi
 
     mov $4, %al
-	jmp sha256_compress_block
+    jmp sha256_compress_block
 
 .Lhmac_leave:
     // Bring hash bytes into correct order
-    pshufd		$0xb1, state_lo, state_lo
-	pshufd		$0x1b, state_hi, state_hi
-    movdqa		state_lo, tmsg4
-	palignr		$0x08, state_hi, state_lo
-	pblendw		$0xf0, tmsg4, state_hi
+    pshufd        $0xb1, state_lo, state_lo
+    pshufd        $0x1b, state_hi, state_hi
+    movdqa        state_lo, tmsg4
+    palignr        $0x08, state_hi, state_lo
+    pblendw        $0xf0, tmsg4, state_hi
 
-	pshufb ishuf_mask, state_lo
+    pshufb ishuf_mask, state_lo
     pshufb ishuf_mask, state_hi
     pshufd $0x4e, state_lo, state_lo
     pshufd $0x4e, state_hi, state_hi
@@ -998,7 +998,7 @@ hmac256:
     mov %r15, %rax
     xor %r14, %r14
     leave
-    .byte	0xf3,0xc3
+    .byte    0xf3,0xc3
     .cfi_endproc
 
 .globl hmac256_end
