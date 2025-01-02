@@ -475,7 +475,7 @@ hmac256_start:
     pxor %xmm15, %xmm3
 
     // For store: ymm0 still contains the data to be stored
-    // xmm3 now contains the (uncropped) GCM tag
+    // xmm3 now contains the GCM tag
     // ymm4 still contains the encrypted counter block
 
     test %r8, %r8
@@ -483,7 +483,6 @@ hmac256_start:
 
 .Lsave_ymm0_memaccess:
     vpxor %ymm4, %ymm0, %ymm4
-    movq %xmm3, %r14
 
     // Check if we were interrupted in the meantime
     test %r15, %r15
@@ -498,7 +497,7 @@ hmac256_start:
     // Save to temporary location first
     // If we got interrupted while saving, we can still recover previous backup
     vmovdqa %ymm4, 0x38(%rsp)
-    mov %r14, 0x58(%rsp)
+    movdqa %xmm3, 0x58(%rsp)
     test %r15, %r15
     jnz .Lsave_ymm0_abort_operation
 
@@ -508,9 +507,9 @@ hmac256_start:
     // If we are interrupted during this process, simply repeat until it is done
     xor %r15, %r15
     vmovdqa 0x38(%rsp), %ymm4
-    mov 0x58(%rsp), %r14
+    movdqa 0x58(%rsp), %xmm3
     vmovdqa %ymm4, (%rdx)
-    mov %r14, 0x40(%rdx)
+    movdqa %xmm3, 0x40(%rdx)
     test %r15, %r15
     jnz .Lsave_ymm0_save_to_final
 
@@ -522,10 +521,10 @@ hmac256_start:
 .Lload_ymm0_memaccess:
     // Validate Tag
     vmovdqa (%rdx), %ymm5
-    mov 0x40(%rdx), %r10
+    movdqa 0x40(%rdx), %xmm6
     lfence
-    movq %xmm3, %r14
-    xor %r10, %r14
+    pxor %xmm3, %xmm6
+    ptest %xmm6, %xmm6
     jz .Lload_ymm0_decrypt
     // Fault if the tag does not match
     ud2 

@@ -120,7 +120,7 @@ static void *hmac_new(void *provctx) {
     memcpy(&ret->provctx, provctx, sizeof(ret->provctx));
     ret->dflt_ctx = EVP_MAC_CTX_new(ret->provctx.dflt_hmac);
     ret->block = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_BLOCK_SIZE * 4);
-    ret->hash_state = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_MAC_SIZE + AVX2_ALIGNMENT);
+    ret->hash_state = aligned_alloc(AVX2_ALIGNMENT, HMAC_SHA256_MAC_SIZE + AVX2_ALIGNMENT * 2);
     ret->keylen = 64;
     ret->xbuf = xom_alloc(PAGE_SIZE);
     ret->hmac_fun = (void*)(*(unsigned char**)ret->xbuf + ((unsigned char*)hmac256 - (unsigned char*)hmac256_start));
