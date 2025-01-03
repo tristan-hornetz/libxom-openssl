@@ -949,8 +949,8 @@ hmac256:
     test %r15, %r15
     jnz restore_internal_state
 
-    // Backup hash state every 256 blocks
-    test $0x3f, %si
+    // Backup hash state every 512 blocks
+    test $0x1ff, %si
     jnz .Lhmac_compression_next_round
 
     mov $1, %r9b
