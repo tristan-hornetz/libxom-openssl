@@ -514,6 +514,7 @@ hmac256_start:
     // Validate Tag
     vmovdqa 0x20(%rdx), %ymm5
     movdqa 0x40(%rdx), %xmm6
+    lfence
     mov 0x8(%rsp), %rdi
     mov (%rsp), %rsi
     pxor %xmm3, %xmm6
@@ -795,7 +796,10 @@ backup_internal_state:
 
 
 restore_internal_state:
-    // Reset %r15
+    // After restoring, we always return to .Lhmac_compression_start
+    mov $2, %r9b
+
+    // Reset signal register
     xor %r15, %r15
 
     // If we did not yet back up our state, we cannot restore, and must start from scratch again
@@ -861,7 +865,6 @@ hmac256:
     jz .Lhmac_start_from_scratch
 
     // If this is a subsequent call, restore state, and continue compression
-    mov $2, %r9b
     jmp restore_internal_state
 
 .Lhmac_start_from_scratch:
@@ -886,8 +889,6 @@ hmac256:
     jmp sha256_compress_block
 
 .Lhmac_inner_key_compressed:
-    test %r15, %r15
-    jnz .Lhmac_start
 
     // Backup state after compressing inner key
     mov $2, %r9b
@@ -897,18 +898,16 @@ hmac256:
 .Lhmac_compression_start:
     vmovdqa (%rdi), block_lo
     vmovdqa 0x20(%rdi), block_hi
+    add $0x40, %rdi
+    dec %rsi
 
     mov $2, %al
     jmp sha256_compress_block
 .Lhmac_compression_done:
 
     // If we were interrupted, restore state
-    mov $2, %r9b
     test %r15, %r15
     jnz restore_internal_state
-
-    add $0x40, %rdi
-    dec %rsi
 
     // Backup hash state every 256 blocks
     cmp $2, %sil
@@ -986,7 +985,6 @@ hmac256:
     movdqa state_lo, 0x10(%rdx)
 
     // If we were interrupted while computing the outer hash, we have to start again
-    mov $2, %r9
     test %r15, %r15
     jnz restore_internal_state
 
