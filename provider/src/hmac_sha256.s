@@ -508,6 +508,7 @@ hmac256_start:
     test %r15, %r15
     jz .Lymm0_crypt_return
     xor %r15, %r15
+    inc %r8b
     jmp .Lsave_ymm0_save_to_final
 
 .Lload_ymm0_memaccess:
@@ -526,8 +527,11 @@ hmac256_start:
     ud2 
 .Lload_ymm0_decrypt:
     vpxor %ymm4, %ymm5, %ymm0
+    xor %r8b, %r8b
 
 .Lymm0_crypt_return:
+    test %r8b, %r8b
+    jnz restore_internal_state
     dec %al
     jmp .Lrestore_sha_registers
 
@@ -796,9 +800,6 @@ backup_internal_state:
 
 
 restore_internal_state:
-    // After restoring, we always return to .Lhmac_compression_start
-    mov $2, %r9b
-
     // Reset signal register
     xor %r15, %r15
 
@@ -806,6 +807,9 @@ restore_internal_state:
     // If we were to continue here, the GCM tag validation would fail, causing us to crash
     test $0x10000, %r12
     jnz .Lhmac_start
+
+    // After restoring, we always return to .Lhmac_compression_start
+    mov $2, %r9b
 
     // Load round keys
     xor %r8, %r8
@@ -937,7 +941,6 @@ hmac256:
 
 
 .Lhmac_start_outer_hash:
-
     // Backup inner hash
     movdqa state_lo, inner_hash_backup_lo
     vinserti128 $1, state_hi, inner_hash_backup, inner_hash_backup
