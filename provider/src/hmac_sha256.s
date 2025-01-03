@@ -354,7 +354,7 @@ hmac256_start:
 .Lload_ymm0:
     // Load old IV
     mov $1, %r8
-    movdqa 0x20(%rdx), %xmm4
+    movdqa 0x50(%rdx), %xmm4
     movhlps %xmm4, %xmm3
     movq %xmm4, %r14
     movq %xmm3, %r10
@@ -443,14 +443,11 @@ hmac256_start:
     vpxor %ymm4, %ymm0, %ymm3
     jmp .Lload_ciph_done
 .Lload_get_ciph:
-    vmovdqa (%rdx), %ymm3
+    vmovdqa 0x20(%rdx), %ymm3
 .Lload_ciph_done:
 
     // cipher text is in ymm3 - note that xmm3 is gfmul_in_a
     // encrypted counter block is in ymm4
-    // HK is in xmm5
-    // KK is in xmm6
-    // POLY is in xmm7
 
     // Hash first and second block into xmm3
     mov $1, %r11
@@ -501,12 +498,12 @@ hmac256_start:
     vmovdqa 0x38(%rsp), %ymm4
     movdqa 0x58(%rsp), %xmm3
     movdqa 0x68(%rsp), %xmm5
-    vmovdqa %ymm4, (%rdx)
-    movdqa %xmm5, 0x20(%rdx)
+    vmovdqa %ymm4, 0x20(%rdx)
     movdqa %xmm3, 0x40(%rdx)
+    movdqa %xmm5, 0x50(%rdx)
+    
     mov %rdi, 0x8(%rsp)
     mov %rsi, (%rsp)
-    mfence
 
     test %r15, %r15
     jz .Lymm0_crypt_return
@@ -515,11 +512,10 @@ hmac256_start:
 
 .Lload_ymm0_memaccess:
     // Validate Tag
-    vmovdqa (%rdx), %ymm5
+    vmovdqa 0x20(%rdx), %ymm5
     movdqa 0x40(%rdx), %xmm6
     mov 0x8(%rsp), %rdi
     mov (%rsp), %rsi
-    lfence
     pxor %xmm3, %xmm6
     ptest %xmm6, %xmm6
     jz .Lload_ymm0_decrypt
