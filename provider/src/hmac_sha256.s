@@ -157,8 +157,7 @@
 .endm
 
 // Place code into .data section, so that we can overwrite the keys
-//.section .rodata
-.text
+.section .rodata
 .align 0x1000
 
 // This symbol only indicates the start of the memory range to be copied into XOM. Do not call.
