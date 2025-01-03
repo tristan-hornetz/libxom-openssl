@@ -492,6 +492,8 @@ hmac256_start:
     jnz restore_internal_state
 
 .Lsave_ymm0_save_to_final:
+    // Unset the 'no backup available' flag, so that we know that we can safely restore from here on
+    and $~0x10000, %r12
 
     // Now, move backup from temporary location to final location, overwriting the previous backup
     // If we are interrupted during this process, simply repeat until it is done
@@ -515,6 +517,8 @@ hmac256_start:
     // Validate Tag
     vmovdqa (%rdx), %ymm5
     movdqa 0x40(%rdx), %xmm6
+    mov 0x8(%rsp), %rdi
+    mov (%rsp), %rsi
     lfence
     pxor %xmm3, %xmm6
     ptest %xmm6, %xmm6
@@ -795,12 +799,13 @@ backup_internal_state:
 
 
 restore_internal_state:
-    // Restore address of message
-    mov 8(%rsp), %rdi
-    mov (%rsp), %rsi
-
     // Reset %r15
     xor %r15, %r15
+
+    // If we did not yet back up our state, we cannot restore, and must start from scratch again
+    // If we were to continue here, the GCM tag validation would fail, causing us to crash
+    test $0x10000, %r12
+    jnz .Lhmac_start
 
     // Load round keys
     xor %r8, %r8
@@ -856,7 +861,7 @@ hmac256:
     vzeroall
 
     // Check whether this is the first call, or a subsequent one
-    test %ch, %ch
+    test $0x100, %r12
     jz .Lhmac_start_from_scratch
 
     // If this is a subsequent call, restore state, and continue compression
@@ -864,6 +869,10 @@ hmac256:
     jmp restore_internal_state
 
 .Lhmac_start_from_scratch:
+    // Set the 'no backup available' flag to indicate that it is currently unsafe to restore from memory
+    // No backup was saved yet, so we cannot restore anything
+    or $0x10000, %r12
+
     // Load shuffle mask
     load_128bit_constant 0x0405060700010203, 0x0c0d0e0f08090a0b, ishuf_mask
     load_256bit_constant_xmm 0xbb67ae856a09e667, 0xa54ff53a3c6ef372, 0x9b05688c510e527f, 0x5be0cd191f83d9ab, state_lo, state_hi
@@ -991,6 +1000,7 @@ hmac256:
     mov %r15, %rax
     xor %r14, %r14
     leave
+    mfence
     .byte    0xf3,0xc3
     .cfi_endproc
 
