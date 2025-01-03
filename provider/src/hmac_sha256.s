@@ -11,13 +11,11 @@
 ////////////////////////
 
 .set msg, %xmm0
-.set inner_hash_backup, %ymm1
 .set inner_hash_backup_lo, %xmm1
 .set inner_hash_backup_hi, %xmm14
 
 .set freeusexmm0, %xmm3
 .set freeusexmm1, %xmm4
-.set freeuseymm0, %ymm3
 
 .set state_backup_hi, %xmm2
 .set state_backup_lo, %xmm9
@@ -31,8 +29,6 @@
 .set tmsg3, %xmm12
 .set tmsg4, %xmm13
 
-.set block_lo, %ymm14
-.set block_hi, %ymm15
 .set block_lolo, msg
 .set block_lohi, tmsg1
 .set block_hilo, tmsg2
@@ -69,7 +65,8 @@
     vmovq %r14, %xmm2
     mov $\quad1, %r14
     vmovq %r14, %xmm3
-    vmovlhps %xmm3, %xmm2, %xmm2
+    vpshufd $0x40, %xmm3, %xmm3
+    vpblendw $0xf0, %xmm3, %xmm2, %xmm2
     vmovdqa %xmm2, \dest
 .endm
 
@@ -82,7 +79,8 @@
     quad1_\name:
     mov $\quad1, %r14
     vmovq %r14, \t1
-    vmovlhps \t1, \dest, \dest
+    vpshufd $0x40, \t1, \t1
+    vpblendw $0xf0, \t1, \dest, \dest
 .endm
 
 .macro load_256bit_constant_xmm, quad0, quad1, quad2, quad3, dest_lo, dest_hi
@@ -90,14 +88,37 @@
     vmovq %r14, %xmm2
     mov $\quad1, %r14
     vmovq %r14, %xmm3
-    vmovlhps %xmm3, %xmm2, %xmm2
-    vmovdqa %xmm2, \dest_lo
+    vpshufd $0x40, %xmm3, %xmm3
+    vpblendw $0xf0, %xmm3, %xmm2, \dest_lo
     mov $\quad2, %r14
     vmovq %r14, %xmm4
     mov $\quad3, %r14
     vmovq %r14, %xmm5
-    vmovlhps %xmm5, %xmm4, %xmm4
-    vmovdqa %xmm4, \dest_hi
+    vpshufd $0x40, %xmm5, %xmm5
+    vpblendw $0xf0, %xmm5, %xmm4, \dest_hi
+.endm
+
+.macro load_256bit_constant_xmm_named, quad0, quad1, quad2, quad3, dest_lo, dest_hi, name
+    .globl quad0_\name
+    quad0_\name:
+    mov $\quad0, %r14
+    vmovq %r14, %xmm2
+    .globl quad1_\name
+    quad1_\name:
+    mov $\quad1, %r14
+    vmovq %r14, %xmm3
+    vpshufd $0x40, %xmm3, %xmm3
+    vpblendw $0xf0, %xmm3, %xmm2, \dest_lo
+    .globl quad2_\name
+    quad2_\name:
+    mov $\quad2, %r14
+    vmovq %r14, %xmm4
+    .globl quad3_\name
+    quad3_\name:
+    mov $\quad3, %r14
+    vmovq %r14, %xmm5
+    vpshufd $0x40, %xmm5, %xmm5
+    vpblendw $0xf0, %xmm5, %xmm4, \dest_hi
 .endm
 
 .macro load_256bit_constant, quad0, quad1, quad2, quad3, dest, name
@@ -109,7 +130,8 @@
     quad1_\name:
     mov $\quad1, %r14
     vmovq %r14, %xmm3
-    vmovlhps %xmm3, %xmm2, %xmm2
+    vpshufd $0x40, %xmm3, %xmm3
+    vpblendw $0xf0, %xmm3, %xmm2, %xmm2
     .globl quad2_\name
     quad2_\name:
     mov $\quad2, %r14
@@ -118,7 +140,8 @@
     quad3_\name:
     mov $\quad3, %r14
     vmovq %r14, %xmm5
-    vmovlhps %xmm5, %xmm4, %xmm4
+    vpshufd $0x40, %xmm5, %xmm5
+    vpblendw $0xf0, %xmm5, %xmm4, %xmm4
     vinserti128    $1, %xmm4, %ymm2, \dest
     xor %r14, %r14
 .endm
@@ -128,7 +151,8 @@
     movq $0x\c_hihi\c_hilo, %r11
     movq %r10, freeusexmm0
     movq %r11, freeusexmm1
-    movlhps freeusexmm1,freeusexmm0
+    pshufd $0x40, freeusexmm1, freeusexmm1
+    pblendw $0xf0, freeusexmm1, freeusexmm0
     paddd freeusexmm0, msg
 .endm
 
@@ -220,10 +244,11 @@ hmac256_start:
     hmac_memenc_key_hi:
     mov $0x123456789abcdef,%r14
     vmovq %r14, %xmm8
-    vmovlhps %xmm8, %xmm9, %xmm9
+    vpshufd $0x40, %xmm8, %xmm8
+    vpblendw $0xf0, %xmm8, %xmm9, %xmm9
 
     // Prepare for round key generation
-    vmovaps %xmm9, %xmm8
+    vmovdqa %xmm9, %xmm8
     vinserti128 $1, %xmm9, %ymm10, %ymm10
 
     vaeskeygenassist $1, %xmm8, %xmm7
@@ -351,7 +376,9 @@ hmac256_start:
     rdrand %r14
     jae .Lsave_ymm0_rdrand2
     vmovq %r14, %xmm4
-    vmovlhps %xmm3, %xmm4, %xmm4
+    vpshufd $0x4e, %xmm3, %xmm3
+    vpblendw $0xf0, %xmm3, %xmm4, %xmm4
+    vpshufd $0x4e, %xmm3, %xmm3
     vmovdqa %xmm4, 0x68(%rsp)
     vmovq %xmm3, %r10
     jmp .Lencrypt_counter_block
@@ -360,7 +387,9 @@ hmac256_start:
     // Load old IV
     mov $1, %r8
     vmovdqa 0x50(%rdx), %xmm4
-    vmovhlps %xmm4, %xmm3, %xmm3
+    vpshufd $0x4e, %xmm4, %xmm4
+    vpblendw $0x0f, %xmm4, %xmm3, %xmm3
+    vpshufd $0x4e, %xmm4, %xmm4
     vmovq %xmm4, %r14
     vmovq %xmm3, %r10
 .Lencrypt_counter_block:
@@ -551,8 +580,8 @@ hmac256_start:
 // Load and pad HMAC key
 // if %r8 == 0 then ipad else opad
 load_key:
-    load_256bit_constant 0x1234567890abdef,0x1234567890abdef,0x1234567890abdef,0x1234567890abdef, block_lo, key_lo
-    load_256bit_constant 0x1234567890abdef,0x1234567890abdef,0x1234567890abdef,0x1234567890abdef, block_hi, key_hi
+    load_256bit_constant_xmm_named 0x1234567890abdef,0x1234567890abdef,0x1234567890abdef,0x1234567890abdef, block_lolo, block_lohi, key_lo
+    load_256bit_constant_xmm_named 0x1234567890abdef,0x1234567890abdef,0x1234567890abdef,0x1234567890abdef, block_hilo, block_hihi, key_hi
     test %r8, %r8
     jz .Lload_key_ipad
     mov $0x5c5c5c5c5c5c5c5c, %r9
@@ -561,9 +590,12 @@ load_key:
     mov $0x3636363636363636, %r9
 .Lload_key_pad:
     vmovq %r9, freeusexmm0
-    vbroadcastss freeusexmm0, freeuseymm0
-    vpxor freeuseymm0, block_lo, block_lo
-    vpxor freeuseymm0, block_hi, block_hi
+    vpshufd $0x44, freeusexmm0, freeusexmm0
+    vpxor freeusexmm0, block_lolo, block_lolo
+    vpxor freeusexmm0, block_lohi, block_lohi
+    vpxor freeusexmm0, block_hilo, block_hilo
+    vpxor freeusexmm0, block_hihi, block_hihi
+
     test %r8, %r8
     jz .Lhmac_compress_key
     jmp .Lhmac_compress_outer_key
@@ -571,16 +603,6 @@ load_key:
 
 // Compress a single 512-bit block
 sha256_compress_block:
-    vextracti128 $0, block_lo, msg
-    vextracti128 $1, block_lo, tmsg1
-    vextracti128 $0, block_hi, tmsg2
-    vextracti128 $1, block_hi, tmsg3
-
-    vextracti128 $1, inner_hash_backup, inner_hash_backup_hi
-
-    // Transition from AVX to SSE to avoid mixed-use penalty on Intel
-    vzeroupper
-
     movdqa state_lo, state_backup_lo
     movdqa state_hi, state_backup_hi
 
@@ -594,9 +616,8 @@ sha256_compress_block:
     sha256rnds2    state_hi, state_lo
 
     /* Rounds 4-7 */
+    pshufb ishuf_mask, tmsg1
     movdqa tmsg1, msg
-    pshufb ishuf_mask, msg
-    movdqa msg, tmsg1
     roundconst_get_inline 3956c25b,59f111f1,923f82a4,ab1c5ed5
 
     sha256rnds2    state_lo, state_hi
@@ -605,9 +626,8 @@ sha256_compress_block:
     sha256msg1    tmsg1, tmsg0
 
     /* Rounds 8-11 */
+    pshufb ishuf_mask, tmsg2
     movdqa tmsg2, msg
-    pshufb ishuf_mask, msg
-    movdqa msg, tmsg2
     roundconst_get_inline d807aa98,12835b01,243185be,550c7dc3
 
     sha256rnds2    state_lo, state_hi
@@ -616,9 +636,8 @@ sha256_compress_block:
     sha256msg1    tmsg2, tmsg1
 
     /* Rounds 12-15 */
+    pshufb ishuf_mask, tmsg3
     movdqa tmsg3, msg
-    pshufb ishuf_mask, msg
-    movdqa msg, tmsg3
     roundconst_get_inline 72be5d74,80deb1fe,9bdc06a7,c19bf174
 
     sha256rnds2    state_lo, state_hi
@@ -737,7 +756,7 @@ sha256_compress_block:
     /* Rounds 48-51 */
     movdqa tmsg0, msg
     roundconst_get_inline 19a4c116,1e376c08,2748774c,34b0bcb5
-.LloadroundconstF1:
+
     sha256rnds2    state_lo, state_hi
     movdqa tmsg0, tmsg4
     palignr $0x04, tmsg3, tmsg4
@@ -750,7 +769,7 @@ sha256_compress_block:
     /* Rounds 52-55 */
     movdqa tmsg1, msg
     roundconst_get_inline 391c0cb3,4ed8aa4a,5b9cca4f,682e6ff3
-.LloadroundconstF2:
+
     sha256rnds2 state_lo, state_hi
     movdqa tmsg1, tmsg4
     palignr $0x04, tmsg0, tmsg4
@@ -762,7 +781,7 @@ sha256_compress_block:
     /* Rounds 56-59 */
     movdqa tmsg2, msg
     roundconst_get_inline 748f82ee,78a5636f,84c87814,8cc70208
-.LloadroundconstF3:
+
     sha256rnds2    state_lo, state_hi
     movdqa tmsg2, tmsg4
     palignr    $0x04, tmsg1, tmsg4
@@ -774,7 +793,7 @@ sha256_compress_block:
     /* Rounds 60-63 */
     movdqa tmsg3, msg
     roundconst_get_inline 90befffa,a4506ceb,bef9a3f7,c67178f2
-.LloadroundconstF4:
+
     sha256rnds2    state_lo, state_hi
     pshufd $0x0e, msg, msg
     sha256rnds2    state_hi, state_lo
@@ -782,8 +801,6 @@ sha256_compress_block:
     /* Add to hash state */
     paddd state_backup_lo, state_lo
     paddd state_backup_hi, state_hi
-
-    vinserti128 $1, inner_hash_backup_hi, inner_hash_backup, inner_hash_backup
 
     dec %al
     jz .Lhmac_inner_key_compressed
@@ -845,6 +862,8 @@ restore_internal_state:
     vmovdqa %xmm0, state_lo
     load_128bit_constant 0x0405060700010203, 0x0c0d0e0f08090a0b, ishuf_mask
 
+    vzeroupper
+
     dec %r9b
     jz .Lhmac_compression_next_round
     dec %r9b
@@ -905,6 +924,7 @@ hmac256:
     jmp load_key
 .Lhmac_compress_key:
     mov $1, %al
+    vzeroupper
     jmp sha256_compress_block
 
 .Lhmac_inner_key_compressed:
@@ -915,8 +935,10 @@ hmac256:
 
     // Compress message
 .Lhmac_compression_start:
-    vmovdqa (%rdi), block_lo
-    vmovdqa 0x20(%rdi), block_hi
+    movdqa (%rdi), block_lolo
+    movdqa 0x10(%rdi), block_lohi
+    movdqa 0x20(%rdi), block_hilo
+    movdqa 0x30(%rdi), block_hihi
     add $0x40, %rdi
     dec %rsi
 
@@ -954,11 +976,10 @@ hmac256:
     vpshufb ishuf_mask, state_lo, state_lo
     vpshufb ishuf_mask, state_hi, state_hi
 
-
 .Lhmac_start_outer_hash:
     // Backup inner hash
     vmovdqa state_lo, inner_hash_backup_lo
-    vinserti128 $1, state_hi, inner_hash_backup, inner_hash_backup
+    vmovdqa state_hi, inner_hash_backup_hi
 
     // Load initial hash state for outer hash
     load_256bit_constant_xmm 0xbb67ae856a09e667, 0xa54ff53a3c6ef372, 0x9b05688c510e527f, 0x5be0cd191f83d9ab, state_lo, state_hi
@@ -975,14 +996,18 @@ hmac256:
 .Lhmac_compress_outer_key:
 
     mov $3, %al
+    vzeroupper
     jmp sha256_compress_block
 
 .Lhmac_compress_outer_key_done:
-    vmovdqa inner_hash_backup, block_lo
     // Padding
-    load_256bit_constant   0x0000000000000080, 0x0, 0x0, 0x0003000000000000 block_hi
+    load_256bit_constant_xmm 0x0000000000000080, 0x0, 0x0, 0x0003000000000000, block_hilo, block_hihi
+
+    vmovdqa inner_hash_backup_lo, block_lolo
+    vmovdqa inner_hash_backup_hi, block_lohi
 
     mov $4, %al
+    vzeroupper
     jmp sha256_compress_block
 
 .Lhmac_leave:
