@@ -1,6 +1,6 @@
 .file "src/aes_vaes.s"
 .section .rodata
-
+.text
 // This version of the AES implementation uses the VAES extensions for better performance
 
 .align 0x100
@@ -32,6 +32,7 @@ aes_vaes_key_hi:
     jmp .Lexpand_round_keys
 
 .Laes_vaes_gctr_linear_prepare_roundkey_128:
+    inc %al
     vpshufd $255, %xmm2, %xmm2
     vmovdqa %xmm1, %xmm3
     vpslldq $4, %xmm3, %xmm3
@@ -70,52 +71,42 @@ aes_vaes_key_hi:
     vpermq $0x44, %ymm0, %ymm4
 
     vaeskeygenassist $1, %xmm1, %xmm2
-    mov $1, %al
     jmp .Lexp_trampoline
 .Laeskeygenret1:
     vmovdqa %ymm1, %ymm5
     vaeskeygenassist $2, %xmm1, %xmm2
-    inc %al
     jmp .Lexp_trampoline
 .Laeskeygenret2:
     vmovdqa %ymm1, %ymm6
     vaeskeygenassist $4, %xmm1, %xmm2
-    inc %al
     jmp .Lexp_trampoline
 .Laeskeygenret3:
     vmovdqa %ymm1, %ymm7
     vaeskeygenassist $8, %xmm1, %xmm2
-    inc %al
     jmp .Lexp_trampoline
 .Laeskeygenret4:
     vmovdqa %ymm1, %ymm8
     vaeskeygenassist $16, %xmm1, %xmm2
-    inc %al
     jmp .Lexp_trampoline
 .Laeskeygenret5:
     vmovdqa %ymm1, %ymm9
     vaeskeygenassist $32, %xmm1, %xmm2
-    inc %al
     jmp .Lexp_trampoline
 .Laeskeygenret6:
     vmovdqa %ymm1, %ymm10
     vaeskeygenassist $64, %xmm1, %xmm2
-    inc %al
     jmp .Lexp_trampoline
 .Laeskeygenret7:
     vmovdqa %ymm1, %ymm11
     vaeskeygenassist $0x80, %xmm1, %xmm2
-    inc %al
     jmp .Lexp_trampoline
 .Laeskeygenret8:
     vmovdqa %ymm1, %ymm12
     vaeskeygenassist $0x1b, %xmm1, %xmm2
-    inc %al
     jmp .Lexp_trampoline
 .Laeskeygenret9:
     vmovdqa %ymm1, %ymm13
     vaeskeygenassist $0x36, %xmm1, %xmm2
-    inc %al
 .Lexp_trampoline:
     jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
 .Laeskeygenret10:
@@ -138,15 +129,14 @@ aes_vaes_key_hi:
     vpshufb %xmm15, %xmm3, %xmm3
 
     // Expand to upper half of %ymm3
-    vmovdqa %xmm3, %xmm0
-    mov $1, %r8
+    xor %r8, %r8
+    inc %r8
     vmovq %r8, %xmm2
-    vpaddq %xmm2, %xmm0, %xmm0
+    vpaddq %xmm2, %xmm3, %xmm0
     vinserti128 $1, %xmm0, %ymm3, %ymm3
+
     vpaddd %xmm2, %xmm2, %xmm2
     vpermq $0x44, %ymm2, %ymm2
-
-.Laes_vaes_gctr_expand_round_keys:
 
     // ceil(%rcx / 2)
     inc %rcx
