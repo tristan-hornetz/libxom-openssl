@@ -221,3 +221,93 @@ aes_vaes_key_hi:
 .global aes_vaes_gctr_linear_end
 aes_vaes_gctr_linear_end:
     ret
+
+
+// The following is an alternative, size-optimized version of the round key derivation
+// Currently unused
+.if 1
+.text
+.align 16,0x90
+
+.Lprepare:
+vpshufd $255, %xmm2, %xmm2
+vmovdqa %xmm1, %xmm3
+vpslldq $4, %xmm3, %xmm3
+vpxor %xmm3, %xmm1, %xmm1
+vpslldq $4, %xmm3, %xmm3
+vpxor %xmm3, %xmm1, %xmm1
+vpslldq $4, %xmm3, %xmm3
+vpxor %xmm3, %xmm1, %xmm1
+vpxor %xmm2, %xmm1, %xmm1
+inc %cl
+mov %cl, %al
+dec %al
+jz .Laeskeygenret1_r
+dec %al
+jz .Laeskeygenret2_r
+dec %al
+jz .Laeskeygenret3_r
+dec %al
+jz .Laeskeygenret4_r
+dec %al
+jz .Laeskeygenret5_r
+dec %al
+jz .Laeskeygenret6_r
+dec %al
+jz .Laeskeygenret7_r
+dec %al
+jz .Laeskeygenret8_r
+dec %al
+jz .Laeskeygenret9_r
+jmp .Laeskeygenret10_r
+
+// CALL HERE
+// parameter xmm1: key
+// fills xmm5-14 with round keys 2 - 10
+key_expansion:
+xor %cl, %cl
+vmovdqa %xmm1, %xmm4
+vaeskeygenassist $1, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret1_r:
+vmovdqa %xmm0, %xmm5
+vaeskeygenassist $2, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret2_r:
+vmovdqa %xmm1, %xmm6
+vaeskeygenassist $4, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret3_r:
+vmovdqa %xmm1,  %xmm7
+vaeskeygenassist $8, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret4_r:
+vmovdqa %xmm1,  %xmm8
+vaeskeygenassist $16, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret5_r:
+vmovdqa %xmm1, %xmm9
+vaeskeygenassist $32, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret6_r:
+vmovdqa %xmm1,  %xmm10
+vaeskeygenassist $64, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret7_r:
+vmovdqa %xmm1,  %xmm11
+vaeskeygenassist $0x80, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret8_r:
+vmovdqa %xmm1,  %xmm12
+vaeskeygenassist $0x1b, %xmm1, %xmm2
+jmp .Lexp_trampoline
+.Laeskeygenret9_r:
+vmovdqa %xmm1,  %xmm13
+vaeskeygenassist $0x36, %xmm1, %xmm2
+.Lexp_trampoline:
+jmp .Lprepare
+.Laeskeygenret10_r:
+vmovdqa %xmm1,  %xmm14
+
+ret
+.endif
