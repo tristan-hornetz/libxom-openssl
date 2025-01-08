@@ -156,6 +156,7 @@ static void xom_teardown(void *provctx) {
             free(default_algorithms[i]);
 
     free(provctx);
+    destroy_subpage_pool();
 }
 
 static const OSSL_DISPATCH xom_dispatch_table[] = {
@@ -242,6 +243,7 @@ OSSL_provider_init(const OSSL_CORE_HANDLE *handle, const OSSL_DISPATCH *in, cons
             default_algorithms[opcodes[i]] = empty_algo;
             continue;
         }
+
         algo_count = count_algos(algo);
         default_algorithms[opcodes[i]] = calloc(algo_count, sizeof(*default_algorithms[0]));
         memcpy(default_algorithms[opcodes[i]], algo, algo_count * sizeof(*default_algorithms[0]));

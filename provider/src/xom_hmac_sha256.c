@@ -134,7 +134,7 @@ static void *hmac_new(void *provctx) {
 static void hmac_free(void *vctx) {
     hmac_sha256_ctx* ctx = vctx;
 
-    if(!(*(ctx->refcount))--){
+    if(!--(*(ctx->refcount))){
         xom_free(ctx->xbuf);
         free(ctx->refcount);
         free(ctx->hash_state);
