@@ -19,106 +19,29 @@ aes_vaes_gctr_linear:
     // Load key from immediates
 .global aes_vaes_key_lo
 aes_vaes_key_lo:
-    movq $0x1234567890abcdef,%r14
-    movq   %r14,%xmm0
+    mov $0x1234567890abcdef,%r14
+    vmovq   %r14,%xmm0
 .global aes_vaes_key_hi
 aes_vaes_key_hi:
-    movq $0x1234567890abcdef,%r14
-    movq   %r14,%xmm1
-    movlhps	%xmm1,%xmm0
+    mov $0x1234567890abcdef,%r14
+    vmovq   %r14,%xmm1
+    vpshufd $0x40, %xmm1, %xmm1
+    vpblendw $0xf0, %xmm1, %xmm0, %xmm0
     xor %r14, %r14
 
-    // Prepare for round key generation
-    movaps %xmm0, %xmm1
-    movaps %xmm0, %xmm4
-
-    aeskeygenassist $1, %xmm1, %xmm2
-    mov $1, %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret1:
-    movdqa %xmm1, %xmm5
-    aeskeygenassist $2, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret2:
-    movdqa %xmm1, %xmm6
-    aeskeygenassist $4, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret3:
-    movdqa %xmm1, %xmm7
-    aeskeygenassist $8, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret4:
-    movdqa %xmm1, %xmm8
-    aeskeygenassist $16, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret5:
-    movdqa %xmm1, %xmm9
-    aeskeygenassist $32, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret6:
-    movdqa %xmm1, %xmm10
-    aeskeygenassist $64, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret7:
-    movdqa %xmm1, %xmm11
-    aeskeygenassist $0x80, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret8:
-    movdqa %xmm1, %xmm12
-    aeskeygenassist $0x1b, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret9:
-    movdqa %xmm1, %xmm13
-    aeskeygenassist $0x36, %xmm1, %xmm2
-    inc %al
-    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
-.Laeskeygenret10:
-    movdqa %xmm1, %xmm14
-
-    // Load shuffle mask
-    mov $0x8090a0b0c0d0e0f, %r14
-    movq %r14, %xmm0
-    mov $0x001020304050607, %r14
-    movq %r14, %xmm1
-    movlhps	%xmm1,%xmm0
-    movdqa %xmm0, %xmm15
-    vinserti128 $1, %xmm15, %ymm15, %ymm15
-
-    // Load initial counter block
-    movdqa (%rdi), %xmm3
-
-    // Reverse CB bytes so we can do big-endian incrementation
-    pshufb %xmm15, %xmm3
-
-    // Expand to upper half of %ymm3
-    movdqa %xmm3, %xmm0
-    movq $1, %r8
-    movq %r8, %xmm2
-    paddq %xmm2, %xmm0
-    vinserti128 $1, %xmm0, %ymm3, %ymm3
-    paddd %xmm2, %xmm2
-    vpermq $0x44, %ymm2, %ymm2
-
-    jmp .Laes_vaes_gctr_expand_round_keys
+    jmp .Lexpand_round_keys
 
 .Laes_vaes_gctr_linear_prepare_roundkey_128:
-    pshufd $255, %xmm2, %xmm2
-    movdqa %xmm1, %xmm3
-    pslldq $4, %xmm3
-    pxor %xmm3, %xmm1
-    pslldq $4, %xmm3
-    pxor %xmm3, %xmm1
-    pslldq $4, %xmm3
-    pxor %xmm3, %xmm1
-    pxor %xmm2, %xmm1
+    vpshufd $255, %xmm2, %xmm2
+    vmovdqa %xmm1, %xmm3
+    vpslldq $4, %xmm3, %xmm3
+    vpxor %xmm3, %xmm1, %xmm1
+    vpslldq $4, %xmm3, %xmm3
+    vpxor %xmm3, %xmm1, %xmm1
+    vpslldq $4, %xmm3, %xmm3
+    vpxor %xmm3, %xmm1, %xmm1
+    vpxor %xmm2, %xmm1, %xmm1
+    vpermq $0x44, %ymm1, %ymm1
 
     mov %al, %r8b
     dec %r8b
@@ -141,19 +64,89 @@ aes_vaes_key_hi:
     jz .Laeskeygenret9
     jmp .Laeskeygenret10
 
-.Laes_vaes_gctr_expand_round_keys:
+.Lexpand_round_keys:
+    // Prepare for round key generation
+    vmovdqa %xmm0, %xmm1
+    vpermq $0x44, %ymm0, %ymm4
 
-    vpermq $0x44, %ymm4, %ymm4
-    vpermq $0x44, %ymm5, %ymm5
-    vpermq $0x44, %ymm6, %ymm6
-    vpermq $0x44, %ymm7, %ymm7
-    vpermq $0x44, %ymm8, %ymm8
-    vpermq $0x44, %ymm9, %ymm9
-    vpermq $0x44, %ymm10, %ymm10
-    vpermq $0x44, %ymm11, %ymm11
-    vpermq $0x44, %ymm12, %ymm12
-    vpermq $0x44, %ymm13, %ymm13
-    vpermq $0x44, %ymm14, %ymm14
+    vaeskeygenassist $1, %xmm1, %xmm2
+    mov $1, %al
+    jmp .Lexp_trampoline
+.Laeskeygenret1:
+    vmovdqa %ymm1, %ymm5
+    vaeskeygenassist $2, %xmm1, %xmm2
+    inc %al
+    jmp .Lexp_trampoline
+.Laeskeygenret2:
+    vmovdqa %ymm1, %ymm6
+    vaeskeygenassist $4, %xmm1, %xmm2
+    inc %al
+    jmp .Lexp_trampoline
+.Laeskeygenret3:
+    vmovdqa %ymm1, %ymm7
+    vaeskeygenassist $8, %xmm1, %xmm2
+    inc %al
+    jmp .Lexp_trampoline
+.Laeskeygenret4:
+    vmovdqa %ymm1, %ymm8
+    vaeskeygenassist $16, %xmm1, %xmm2
+    inc %al
+    jmp .Lexp_trampoline
+.Laeskeygenret5:
+    vmovdqa %ymm1, %ymm9
+    vaeskeygenassist $32, %xmm1, %xmm2
+    inc %al
+    jmp .Lexp_trampoline
+.Laeskeygenret6:
+    vmovdqa %ymm1, %ymm10
+    vaeskeygenassist $64, %xmm1, %xmm2
+    inc %al
+    jmp .Lexp_trampoline
+.Laeskeygenret7:
+    vmovdqa %ymm1, %ymm11
+    vaeskeygenassist $0x80, %xmm1, %xmm2
+    inc %al
+    jmp .Lexp_trampoline
+.Laeskeygenret8:
+    vmovdqa %ymm1, %ymm12
+    vaeskeygenassist $0x1b, %xmm1, %xmm2
+    inc %al
+    jmp .Lexp_trampoline
+.Laeskeygenret9:
+    vmovdqa %ymm1, %ymm13
+    vaeskeygenassist $0x36, %xmm1, %xmm2
+    inc %al
+.Lexp_trampoline:
+    jmp .Laes_vaes_gctr_linear_prepare_roundkey_128
+.Laeskeygenret10:
+    vmovdqa %ymm1, %ymm14
+
+    // Load shuffle mask
+    mov $0x8090a0b0c0d0e0f, %r14
+    vmovq %r14, %xmm0
+    mov $0x001020304050607, %r14
+    vmovq %r14, %xmm1
+    vpshufd $0x40, %xmm1, %xmm1
+    vpblendw $0xf0, %xmm1, %xmm0, %xmm0
+    vmovdqa %xmm0, %xmm15
+    vinserti128 $1, %xmm15, %ymm15, %ymm15
+
+    // Load initial counter block
+    vmovdqa (%rdi), %xmm3
+
+    // Reverse CB bytes so we can do big-endian incrementation
+    vpshufb %xmm15, %xmm3, %xmm3
+
+    // Expand to upper half of %ymm3
+    vmovdqa %xmm3, %xmm0
+    mov $1, %r8
+    vmovq %r8, %xmm2
+    vpaddq %xmm2, %xmm0, %xmm0
+    vinserti128 $1, %xmm0, %ymm3, %ymm3
+    vpaddd %xmm2, %xmm2, %xmm2
+    vpermq $0x44, %ymm2, %ymm2
+
+.Laes_vaes_gctr_expand_round_keys:
 
     // ceil(%rcx / 2)
     inc %rcx
@@ -221,3 +214,92 @@ aes_vaes_key_hi:
 .global aes_vaes_gctr_linear_end
 aes_vaes_gctr_linear_end:
     ret
+
+// The following is an alternative, size-optimized version of the round key derivation
+// Currently unused
+.if 0
+.text
+.align 16,0x90
+
+.Lprepare:
+    vpshufd $255, %xmm2, %xmm2
+    vmovdqa %xmm1, %xmm3
+    vpslldq $4, %xmm3, %xmm3
+    vpxor %xmm3, %xmm1, %xmm1
+    vpslldq $4, %xmm3, %xmm3
+    vpxor %xmm3, %xmm1, %xmm1
+    vpslldq $4, %xmm3, %xmm3
+    vpxor %xmm3, %xmm1, %xmm1
+    vpxor %xmm2, %xmm1, %xmm1
+    inc %cl
+    mov %cl, %al
+    dec %al
+    jz .Laeskeygenret1_r
+    dec %al
+    jz .Laeskeygenret2_r
+    dec %al
+    jz .Laeskeygenret3_r
+    dec %al
+    jz .Laeskeygenret4_r
+    dec %al
+    jz .Laeskeygenret5_r
+    dec %al
+    jz .Laeskeygenret6_r
+    dec %al
+    jz .Laeskeygenret7_r
+    dec %al
+    jz .Laeskeygenret8_r
+    dec %al
+    jz .Laeskeygenret9_r
+    jmp .Laeskeygenret10_r
+
+    // CALL HERE
+    // parameter xmm1: key
+    // fills xmm5-14 with round keys 2 - 10
+key_expansion:
+    xor %cl, %cl
+    vmovdqa %xmm1, %xmm4
+    vaeskeygenassist $1, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret1_r:
+    vmovdqa %xmm0, %xmm5
+    vaeskeygenassist $2, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret2_r:
+    vmovdqa %xmm1, %xmm6
+    vaeskeygenassist $4, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret3_r:
+    vmovdqa %xmm1,  %xmm7
+    vaeskeygenassist $8, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret4_r:
+    vmovdqa %xmm1,  %xmm8
+    vaeskeygenassist $16, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret5_r:
+    vmovdqa %xmm1, %xmm9
+    vaeskeygenassist $32, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret6_r:
+    vmovdqa %xmm1,  %xmm10
+    vaeskeygenassist $64, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret7_r:
+    vmovdqa %xmm1,  %xmm11
+    vaeskeygenassist $0x80, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret8_r:
+    vmovdqa %xmm1,  %xmm12
+    vaeskeygenassist $0x1b, %xmm1, %xmm2
+    jmp .Lexp_trampoline
+    .Laeskeygenret9_r:
+    vmovdqa %xmm1,  %xmm13
+    vaeskeygenassist $0x36, %xmm1, %xmm2
+    .Lexp_trampoline:
+    jmp .Lprepare
+    .Laeskeygenret10_r:
+    vmovdqa %xmm1,  %xmm14
+
+    ret
+.endif
