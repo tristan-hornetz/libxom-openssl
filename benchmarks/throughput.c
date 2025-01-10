@@ -6,7 +6,12 @@
 #include <cpuid.h>
 #include <unistd.h>
 #include <libgen.h>
+#include <syscall.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <perfmon/pfmlib.h>
+#include <perfmon/pfmlib_perf_event.h>
+//#include <linux/perf_event.h>
 #include <openssl/provider.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -27,6 +32,16 @@
 #define TSC_DENOMINATOR 0x2
 #define TSC_NUMERATOR 0xb6
 #define TSC_CRYSTAL_FREQUENCY 0x249f000
+
+#define ALDER_LAKE_MEM_STALLS_L1D_MISS "r347"
+#define ALDER_LAKE_MEM_STALLS_L3_MISS "r947"
+#define ALDER_LAKE_STALLS_TOTAL "r4a3"
+#define ALDER_LAKE_BOUND_ON_LOAD "r21a6"
+#define ALDER_LAKE_STALLS "r1b1"
+#define ALDER_LAKE_STALLS_SB "r8a2"
+#define ALDER_LAKE_L1D_MISS_PENDING_CYCLES "r148"
+#define ALDER_LAKE_L1D_MISS_L2_STALLS "r448"
+#define ALDER_LAKE_STLB_MISS_LOADS "r11d0"
 
 #define TEST_PROV "xom"
 #define TEST_CHUNK_SIZE (1 << 28)
@@ -63,6 +78,10 @@ static uint64_t rdtsc(void) {
     asm volatile("mfence\nrdtsc" : "=a"(a), "=d"(d));
     return a | (d << 32);
 }
+
+static int perf_fd;
+static unsigned long perf_test[NUM_REPEATS];
+static unsigned long perf_verify[NUM_REPEATS];
 
 static void get_cpu_ident(char o[49]){
     uint64_t a, b, c, d;
@@ -328,6 +347,7 @@ static FILE* get_benchmark_file(const char* spec){
 static void run_cipher_benchmark(cipher_benchmark* benchmark, const unsigned char* src_buf, unsigned char *dest_buf) {
     const struct {const char* name; EVP_CIPHER* ciph;} runs[] = {{"test", benchmark->test_cipher}, {"verify", benchmark->verify_cipher}};
     ssize_t timing, avg;
+    unsigned long perf_avg;
     FILE* f;
     unsigned i, r;
 
@@ -339,22 +359,28 @@ static void run_cipher_benchmark(cipher_benchmark* benchmark, const unsigned cha
 
     for(r = 0; r < countof(runs); r++) {
         avg = 0;
+        perf_avg = 0;
         fprintf(f, "timings_%s = [", runs[r].name);
         for (i = 0; i < NUM_REPEATS; i++) {
             printf("\r" STR_PEND "%s %s cipher (%04u/%04u)                            ", benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS);
             fflush(stdout);
+            ioctl(perf_fd, PERF_EVENT_IOC_RESET, 0);
+            ioctl(perf_fd, PERF_EVENT_IOC_ENABLE, 0);
             timing = encrypt(runs[r].ciph, src_buf, dest_buf);
+            ioctl(perf_fd, PERF_EVENT_IOC_DISABLE, 0);
+            read(perf_fd, (r ? &perf_test[i] : &perf_verify[i]), sizeof(unsigned long));
             if (timing < 0) {
                 printf("\r" STR_FAIL "%s %s cipher (%04u/%04u) --> Error! Aborting test                          \n",
                        benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS);
                 goto exit;
             }
+            perf_avg += r ? perf_test[i] : perf_verify[i];
             avg += timing;
             fprintf(f, "0x%lx, ", timing);
         }
         fprintf(f, "]\n");
-        printf("\r" STR_OK "%s %s cipher (%04u/%04u) --> Done! Avg. %f GB/s                          \n",
-               benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS, ((double) TEST_CHUNK_SIZE / GIGABYTE) / tsc_to_seconds((double) avg / NUM_REPEATS));
+        printf("\r" STR_OK "%s %s cipher (%04u/%04u) --> Done! Avg. %f GB/s  Avg. perf. %lu                        \n",
+               benchmark->cipher_spec, runs[r].name, i, NUM_REPEATS, ((double) TEST_CHUNK_SIZE / GIGABYTE) / tsc_to_seconds((double) avg / NUM_REPEATS), (unsigned long)((double)perf_avg/NUM_REPEATS));
     }
 
 exit:
@@ -402,10 +428,13 @@ exit:
 
 int main() {
     int ret = 1;
+    const char* perf_ctr_spec = ALDER_LAKE_MEM_STALLS_L3_MISS;
     unsigned char __attribute__((aligned(32))) mac_buf[64];
     unsigned char* src_buf = NULL, *dest_buf = NULL;
     OSSL_PROVIDER *custom_provider;
     unsigned i;
+    struct perf_event_attr pe;
+    pfm_perf_encode_arg_t perf_args;
     cipher_benchmark cipher_benchmarks[] = {
             {.cipher_spec = "AES-128-GCM"},
             {.cipher_spec = "AES-128-CTR"},
@@ -418,6 +447,26 @@ int main() {
 
     get_tsc_freq();
     get_cpu_ident(cpu_ident);
+
+    if (pfm_initialize() != PFM_SUCCESS) {
+        printf( STR_FAIL "PFM initialization failed!\n");
+        return -1;
+    }
+
+    memset(&pe, 0, sizeof(struct perf_event_attr));
+    memset(&perf_args, 0, sizeof(perf_args));
+    perf_args.attr = &pe;
+    ret = pfm_get_os_event_encoding(perf_ctr_spec, PFM_PLM0 | PFM_PLM3, PFM_OS_PERF_EVENT, &perf_args);
+    if (ret != PFM_SUCCESS) {
+        printf( STR_FAIL "Could not find performance counter!\n");
+        return -1;
+    }
+    perf_fd = perf_event_open(&pe, 0, -1, -1, 0);
+    if (perf_fd < 0) {
+        printf( STR_FAIL "Could not open performance counter - errno %d\n", errno);
+        return -1;
+    }
+    printf(STR_OK "Successfully opened handle to performance counter '%s'\n", perf_ctr_spec);
 
     custom_provider = get_xom_provider();
 
@@ -439,6 +488,8 @@ int main() {
     printf("\r" STR_OK "Successfully initialized benchmarks! Performing %u repetitions with %u MB per test!\n", NUM_REPEATS, (unsigned)(TEST_CHUNK_SIZE/(1 << 20)));
 
     for(i = 0; i < countof(cipher_benchmarks); i++){
+        memset(perf_test, 0, sizeof(perf_test));
+        memset(perf_verify, 0, sizeof(perf_verify));
         printf(STR_PEND "Testing correctness of cipher '%s' ...", cipher_benchmarks[i].cipher_spec);
         fflush(stdout);
         if(verify_cipher_correctness(&cipher_benchmarks[i], src_buf, dest_buf) < 0) {

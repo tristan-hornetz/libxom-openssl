@@ -30,7 +30,7 @@ target_link_libraries(xom_provider PUBLIC OpenSSL::Crypto xom)
 
 add_executable(throughput benchmarks/throughput.c)
 target_compile_options(throughput PUBLIC "-march=native;-O3")
-target_link_libraries(throughput PUBLIC OpenSSL::Crypto xom)
+target_link_libraries(throughput PUBLIC OpenSSL::Crypto xom pfm)
 
 add_executable(setup benchmarks/setup.c)
 target_compile_options(setup PUBLIC "-march=native;-O3")
